@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const fs = require('fs');
 const app = express();
 const port = process.env.PORT || 3000;
 app.use(cors()); // This will enable CORS for all routes and origins
@@ -54,6 +55,30 @@ app.get('/api/teamBatting', async (req, res) => {
       res.status(500).send('Internal Server Error');
     }
   });
+
+  app.get('/api/mlb-news', (req, res) => {
+    const newsFile = 'mlb_news_mlb.json'; // Path to your MLB news file
+    fs.readFile(newsFile, (err, data) => {
+        if (err) {
+            res.status(500).send('Error reading MLB news data');
+            return;
+        }
+        res.type('application/json');
+        res.send(data);
+    });
+});
+
+app.get('/api/braves-news', (req, res) => {
+    const newsFile = 'mlb_news_atlanta_braves.json'; // Path to your Braves news file
+    fs.readFile(newsFile, (err, data) => {
+        if (err) {
+            res.status(500).send('Error reading Braves news data');
+            return;
+        }
+        res.type('application/json');
+        res.send(data);
+    });
+});
 
 app.listen(port, () => {
     console.log(`MLB port listening at ${port}`);
