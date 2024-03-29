@@ -1,14 +1,9 @@
 #!/bin/bash
 
-# Use $HOME for home directory expansion and avoid using wildcard in the assignment
 CSV_DIR="/home/henrycraig/mlb_pi/data/2024"
 DB_NAME="mlb_2024"
 DB_USER="mlb"
 DB_PASSWORD="password"
-
-# Activate the virtual environment for csvkit
-source "/home/henrycraig/csvkit_env/bin/activate"
-
 
 # Loop through each CSV file in the directory
 for CSV_FILE in "$CSV_DIR"/*.csv; do
@@ -17,6 +12,9 @@ for CSV_FILE in "$CSV_DIR"/*.csv; do
 
   # Preprocess the CSV to remove dollar signs in numeric fields
   sed -i 's/\$//g' "$CSV_FILE"
+  
+  # Replace "None" with "false" for boolean columns
+  sed -i 's/,None,/,false,/g' "$CSV_FILE"
 
   # Drop the table if it exists to avoid duplicate data issues
   PGPASSWORD=$DB_PASSWORD psql -U "$DB_USER" -d "$DB_NAME" -c "DROP TABLE IF EXISTS \"$TABLE_NAME\";"
@@ -30,6 +28,3 @@ for CSV_FILE in "$CSV_DIR"/*.csv; do
   # Import the CSV file into the table
   PGPASSWORD=$DB_PASSWORD psql -U "$DB_USER" -d "$DB_NAME" -c "\copy \"$TABLE_NAME\" FROM '$CSV_FILE' WITH (FORMAT csv, HEADER true)"
 done
-
-# Deactivate the virtual environment
-deactivate
