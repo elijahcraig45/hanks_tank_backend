@@ -9,7 +9,7 @@ source "$HOME/csvkit_env/bin/activate"
 
 # Run pybaseballGatherer.py and append output to log file
 echo "Running pybaseballGatherer.py..." >> "$LOG_FILE"
-python "$HOME/mlb_pi/pybaseballGatherer.py" >> "$LOG_FILE" 2>&1
+python "$HOME/mlb_pi/pybaseballGather.py" >> "$LOG_FILE" 2>&1
 
 # Run newsFetch.py and append output to log file
 echo "Running newsFetch.py..." >> "$LOG_FILE"
