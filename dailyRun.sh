@@ -11,6 +11,10 @@ source "$HOME/csvkit_env/bin/activate"
 echo "Running pybaseballGatherer.py..." >> "$LOG_FILE"
 python "$HOME/mlb_pi/pybaseballGather.py" >> "$LOG_FILE" 2>&1
 
+# Deactivate the virtual environment
+echo "Deactivating virtual environment..." >> "$LOG_FILE"
+deactivate
+
 # Run newsFetch.py and append output to log file
 echo "Running newsFetch.py..." >> "$LOG_FILE"
 python "$HOME/mlb_pi/newsFetch.py" >> "$LOG_FILE" 2>&1
@@ -19,8 +23,5 @@ python "$HOME/mlb_pi/newsFetch.py" >> "$LOG_FILE" 2>&1
 echo "Running csvImport.sh..." >> "$LOG_FILE"
 "$HOME/mlb_pi/csvImport.sh" >> "$LOG_FILE" 2>&1
 
-# Deactivate the virtual environment
-echo "Deactivating virtual environment..." >> "$LOG_FILE"
-deactivate
 
 echo "Daily tasks completed on $(date)" >> "$LOG_FILE"
