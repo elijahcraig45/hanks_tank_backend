@@ -50,6 +50,11 @@ app.get('/api/PlayerPitching', (req, res) => {
   fetchDataFromTable(req, res, 'playerPitching');
 });
 
+// Modified endpoint to handle year query for Player Pitching
+app.get('/api/Standings', (req, res) => {
+  fetchDataFromTable(req, res, 'standings');
+});
+
 // MLB News endpoint
 app.get('/api/mlb-news', (req, res) => {
     fs.readFile('mlb_news_mlb.json', (err, data) => {
@@ -61,6 +66,8 @@ app.get('/api/mlb-news', (req, res) => {
         res.send(data);
     });
 });
+
+
 
 // Braves News endpoint
 app.get('/api/braves-news', (req, res) => {
