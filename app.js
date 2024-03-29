@@ -19,7 +19,7 @@ app.get('/', (req, res) => {
 
 // Generic function to fetch data based on year and table name
 async function fetchDataFromTable(req, res, tableNamePrefix) {
-  const year = req.query.year || '2023'; // Default to 2023 if no year is provided
+  const year = req.query.year || '2024'; // Default to 2023 if no year is provided
   const tableName = `"${tableNamePrefix}_${year}"`; // Construct table name
   try {
     const queryResult = await pool.query(`SELECT * FROM ${tableName}`);
