@@ -1,4 +1,3 @@
- GNU nano 7.2                                                                     csvImport.sh
 #!/bin/bash
 
 # Use $HOME for home directory expansion and avoid using wildcard in the assignment
