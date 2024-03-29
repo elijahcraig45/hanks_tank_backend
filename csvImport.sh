@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Use $HOME for home directory expansion and avoid using wildcard in the assignment
-CSV_DIR="$HOME/data/2024"
+CSV_DIR="$HOME/mlb_pi/data/2024"
 DB_NAME="mlb_2024"
 DB_USER="mlb"
 DB_PASSWORD="add password here"
