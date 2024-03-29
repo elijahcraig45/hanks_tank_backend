@@ -1,7 +1,9 @@
 import sys
 import os
 import pandas as pd
-from pybaseball import batting_stats, pitching_stats, standings, team_batting, team_pitching, statcast
+from pybaseball import batting_stats, pitching_stats, standings, team_batting, team_pitching, statcast, schedule_and_record
+
+
 
 def save_to_csv(df, year, filename):
     """Save DataFrame to CSV if not empty."""
@@ -14,6 +16,15 @@ def save_to_csv(df, year, filename):
         print(f"{filename} added")
     else:
         print(f"No data to add for {filename}")
+
+def fetch_and_store_team_schedules_and_records(year, teams):
+    """Fetch and store team schedules and records for the provided year."""
+    for team in teams:
+        try:
+            team_schedule_record_df = schedule_and_record(year, team)
+            save_to_csv(team_schedule_record_df, year, f"team_schedule_and_record_{team}_{year}.csv")
+        except Exception as e:
+            print(f"Failed to fetch or save data for team {team} in {year}: {e}")
 
 def fetch_and_store_mlb_data(year):
     """Fetch MLB data for a given year and store it locally."""
@@ -42,6 +53,11 @@ def fetch_and_store_mlb_data(year):
     # Statcast
     statcastdf = statcast(start_dt=f"{year}-03-01", end_dt=f"{year}-12-01")
     save_to_csv(statcastdf, year, f"statcast_{year}.csv")
+
+    # Fetch and store team schedules and records
+    # List of team abbreviations to fetch schedules and records for
+    teams = ['BAL', 'BOS', 'CHA', 'CLE', 'DET', 'HOU', 'KCR', 'LAA', 'MIN', 'NYA', 'OAK', 'SEA', 'TBA', 'TEX', 'TOR', 'ARI', 'ATL', 'CHN', 'CIN', 'COL', 'LAN', 'MIA', 'MIL', 'NYN', 'PHI', 'PIT', 'SDN', 'SFN', 'SLN', 'WSN']
+    fetch_and_store_team_schedules_and_records(year, teams)
 
     print("All MLB data fetched and stored locally.")
 

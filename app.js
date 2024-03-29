@@ -55,6 +55,43 @@ app.get('/api/Standings', (req, res) => {
   fetchDataFromTable(req, res, 'standings');
 });
 
+
+// Aggregated Team Data endpoint
+app.get('/api/teamData', async (req, res) => {
+  const teamAbbr = req.query.teamAbbr || 'ATL'; // Default to 'ATL' if no team abbreviation is provided
+  const year = req.query.year || '2024'; // Default to 2024 if no year is provided
+  const teamTableSuffix = `team_schedule_and_record_${teamAbbr}_${year}`;
+
+  try {
+      // Fetch team batting stats
+      const teamBatting = await pool.query(`SELECT * FROM "teamBatting_${year}" WHERE "Team" = '${teamAbbr}'`);
+      // Fetch team pitching stats
+      const teamPitching = await pool.query(`SELECT * FROM "teamPitching_${year}" WHERE "Team" = '${teamAbbr}'`);
+      // Fetch top batters - this is an example, adjust according to your criteria
+      const topBatters = await pool.query(`SELECT * FROM "playerBatting_${year}" WHERE "Team" = '${teamAbbr}' ORDER BY "AVG" DESC;`);
+      
+      // Fetch top pitchers - this is an example, adjust according to your criteria
+      const topPitchers = await pool.query(`SELECT * FROM "playerPitching_${year}" WHERE "Team" = '${teamAbbr}' ORDER BY "ERA" ASC`);
+      // Fetch team schedule and record
+      const scheduleAndRecord = await pool.query(`SELECT * FROM "${teamTableSuffix}"`);
+
+      // Aggregate data into one response
+      const responseData = {
+          teamBatting: teamBatting.rows,
+          teamPitching: teamPitching.rows,
+          topBatters: topBatters.rows,
+          topPitchers: topPitchers.rows,
+          scheduleAndRecord: scheduleAndRecord.rows
+      };
+
+      res.json(responseData);
+  } catch (error) {
+      console.error('Error executing query', error.stack);
+      res.status(500).send('Internal Server Error');
+  }
+});
+
+
 // MLB News endpoint
 app.get('/api/mlb-news', (req, res) => {
     fs.readFile('mlb_news_mlb.json', (err, data) => {
