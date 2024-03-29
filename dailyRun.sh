@@ -21,7 +21,7 @@ python "$HOME/mlb_pi/newsFetch.py" >> "$LOG_FILE" 2>&1
 
 # Execute csvImport.sh and append output to log file
 echo "Running csvImport.sh..." >> "$LOG_FILE"
-"$HOME/mlb_pi/csvImport.sh" >> "$LOG_FILE" 2>&1
+sudo "$HOME/mlb_pi/csvImport.sh" >> "$LOG_FILE" 2>&1
 
 
 echo "Daily tasks completed on $(date)" >> "$LOG_FILE"
