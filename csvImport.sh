@@ -4,7 +4,7 @@
 CSV_DIR="/home/henrycraig/mlb_pi/data/2024"
 DB_NAME="mlb_2024"
 DB_USER="mlb"
-DB_PASSWORD="@Narnia45"
+DB_PASSWORD="password"
 
 # Activate the virtual environment for csvkit
 source "/home/henrycraig/csvkit_env/bin/activate"
