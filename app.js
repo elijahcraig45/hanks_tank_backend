@@ -64,21 +64,56 @@ app.get('/api/teamData', async (req, res) => {
 
   try {
       // Fetch team batting stats
-      const teamBatting = await pool.query(`SELECT * FROM "teamBatting_${year}" WHERE "Team" = '${teamAbbr}'`);
+      const teamBatting_2024 = await pool.query(`SELECT * FROM "teamBatting_2024" WHERE "Team" = '${teamAbbr}'`);
       // Fetch team pitching stats
-      const teamPitching = await pool.query(`SELECT * FROM "teamPitching_${year}" WHERE "Team" = '${teamAbbr}'`);
+      const teamPitching_2024 = await pool.query(`SELECT * FROM "teamPitching_2024" WHERE "Team" = '${teamAbbr}'`);
+
+      // Fetch team batting stats
+      const teamBatting_2023 = await pool.query(`SELECT * FROM "teamBatting_2023" WHERE "Team" = '${teamAbbr}'`);
+      // Fetch team pitching stats
+      const teamPitching_2023 = await pool.query(`SELECT * FROM "teamPitching_2023" WHERE "Team" = '${teamAbbr}'`);
+
+      // Fetch team batting stats
+      const teamBatting_2022 = await pool.query(`SELECT * FROM "teamBatting_2022" WHERE "Team" = '${teamAbbr}'`);
+      // Fetch team pitching stats
+      const teamPitching_2022 = await pool.query(`SELECT * FROM "teamPitching_2022" WHERE "Team" = '${teamAbbr}'`);
+
+      // Fetch team batting stats
+      const teamBatting_2021 = await pool.query(`SELECT * FROM "teamBatting_2021" WHERE "Team" = '${teamAbbr}'`);
+      // Fetch team pitching stats
+      const teamPitching_2021 = await pool.query(`SELECT * FROM "teamPitching_2021" WHERE "Team" = '${teamAbbr}'`);
+
+      // Fetch team batting stats
+      const teamBatting_2020 = await pool.query(`SELECT * FROM "teamBatting_2020" WHERE "Team" = '${teamAbbr}'`);
+      // Fetch team pitching stats
+      const teamPitching_2020 = await pool.query(`SELECT * FROM "teamPitching_2020" WHERE "Team" = '${teamAbbr}'`);
+
+      // Fetch team batting stats
+      const teamBatting_2019 = await pool.query(`SELECT * FROM "teamBatting_2019" WHERE "Team" = '${teamAbbr}'`);
+      // Fetch team pitching stats
+      const teamPitching_2019 = await pool.query(`SELECT * FROM "teamPitching_2019" WHERE "Team" = '${teamAbbr}'`);
       // Fetch top batters - this is an example, adjust according to your criteria
-      const topBatters = await pool.query(`SELECT * FROM "playerBatting_${year}" WHERE "Team" = '${teamAbbr}' ORDER BY "AVG" DESC;`);
+      const topBatters = await pool.query(`SELECT * FROM "playerBatting_2024" WHERE "Team" = '${teamAbbr}' ORDER BY "AVG" DESC;`);
       
       // Fetch top pitchers - this is an example, adjust according to your criteria
-      const topPitchers = await pool.query(`SELECT * FROM "playerPitching_${year}" WHERE "Team" = '${teamAbbr}' ORDER BY "ERA" ASC`);
+      const topPitchers = await pool.query(`SELECT * FROM "playerPitching_2024" WHERE "Team" = '${teamAbbr}' ORDER BY "ERA" ASC`);
       // Fetch team schedule and record
       const scheduleAndRecord = await pool.query(`SELECT * FROM "${teamTableSuffix}"`);
 
       // Aggregate data into one response
       const responseData = {
-          teamBatting: teamBatting.rows,
-          teamPitching: teamPitching.rows,
+          teamBatting_2024: teamBatting_2024.rows,
+          teamPitching_2024: teamPitching_2024.rows,
+          teamBatting_2023: teamBatting_2023.rows,
+          teamPitching_2023: teamPitching_2023.rows,
+          teamBatting_2022: teamBatting_2022.rows,
+          teamPitching_2022: teamPitching_2022.rows,
+          teamBatting_2021: teamBatting_2021.rows,
+          teamPitching_2021: teamPitching_2021.rows,
+          teamBatting_2020: teamBatting_2020.rows,
+          teamPitching_2020: teamPitching_2020.rows,
+          teamBatting_2019: teamBatting_2019.rows,
+          teamPitching_2019: teamPitching_2019.rows,
           topBatters: topBatters.rows,
           topPitchers: topPitchers.rows,
           scheduleAndRecord: scheduleAndRecord.rows
