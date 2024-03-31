@@ -129,7 +129,7 @@ app.get('/api/teamData', async (req, res) => {
 
 const pythonEnvPath = '/home/henrycraig/csvkit_env/bin/python3';
 
-app.get('/player-stats/:firstName/:lastName', async (req, res) => {
+app.get('/api/player-stats/:firstName/:lastName', async (req, res) => {
   const { firstName, lastName } = req.params;
 
   // Use the Python executable from the virtual environment
