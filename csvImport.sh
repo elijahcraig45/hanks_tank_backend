@@ -4,6 +4,7 @@ CSV_DIR="/home/henrycraig/mlb_pi/data/2024"
 DB_NAME="mlb_2024"
 DB_USER="mlb"
 DB_PASSWORD="password"
+source "$HOME/csvkit_env/bin/activate"
 
 # Loop through each CSV file in the directory
 for CSV_FILE in "$CSV_DIR"/*.csv; do
@@ -28,3 +29,6 @@ for CSV_FILE in "$CSV_DIR"/*.csv; do
   # Import the CSV file into the table
   PGPASSWORD=$DB_PASSWORD psql -U "$DB_USER" -d "$DB_NAME" -c "\copy \"$TABLE_NAME\" FROM '$CSV_FILE' WITH (FORMAT csv, HEADER true)"
 done
+
+
+deactivate

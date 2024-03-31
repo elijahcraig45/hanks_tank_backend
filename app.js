@@ -129,7 +129,8 @@ app.get('/api/teamData', async (req, res) => {
 
 const pythonEnvPath = '/home/henrycraig/csvkit_env/bin/python3';
 
-app.get('/api/player-stats/:firstName/:lastName', async (req, res) => {
+
+app.get('/api/player-statcast/:firstName/:lastName', async (req, res) => {
   const { firstName, lastName } = req.params;
 
   // Use the Python executable from the virtual environment
@@ -149,6 +150,28 @@ app.get('/api/player-stats/:firstName/:lastName', async (req, res) => {
       // This is a placeholder query; modify it according to your schema
       const statcast_batting = await pool.query('SELECT * FROM "statcast_2024" WHERE "batter" = $1', [playerId]);
       const statcast_pitching = await pool.query('SELECT * FROM "statcast_2024" WHERE "pitcher" = $1', [playerId]);
+        // Aggregate data into one response
+  const responseData = {
+    statcastBatting: statcast_batting.rows,
+    statcastPitching: statcast_pitching.rows
+};
+
+res.json(responseData);
+    } catch (dbError) {
+      console.error(`Database error: ${dbError}`);
+      res.status(500).send('Database query failed');
+    }
+  });
+});
+
+
+app.get('/api/player-stats/:firstName/:lastName', async (req, res) => {
+  const { firstName, lastName } = req.params;
+
+  
+    try {
+      // Query your database using the player ID
+      // This is a placeholder query; modify it according to your schema
       const playerBatting_2024 = await pool.query(`SELECT * FROM "playerBatting_2024" WHERE "Name" = \'${firstName} ${lastName}\'`);
       const playerPitching_2024 = await pool.query(`SELECT * FROM "playerPitching_2024" WHERE "Name" = \'${firstName} ${lastName}\'`);
       const playerBatting_2023 = await pool.query(`SELECT * FROM "playerBatting_2023" WHERE "Name" = \'${firstName} ${lastName}\'`);
@@ -177,8 +200,6 @@ app.get('/api/player-stats/:firstName/:lastName', async (req, res) => {
     playerPitching_2020: playerPitching_2020.rows,
     playerBatting_2019: playerBatting_2019.rows,
     playerPitching_2019: playerPitching_2019.rows,
-    statcastBatting: statcast_batting.rows,
-    statcastPitching: statcast_pitching.rows
 };
 
 res.json(responseData);
@@ -187,7 +208,6 @@ res.json(responseData);
       res.status(500).send('Database query failed');
     }
   });
-});
 
 
 
