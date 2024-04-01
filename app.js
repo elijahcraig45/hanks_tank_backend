@@ -165,25 +165,24 @@ res.json(responseData);
 });
 
 
-app.get('/api/player-stats/:firstName/:lastName', async (req, res) => {
-  const { firstName, lastName } = req.params;
-
+app.get('/api/player-stats/', async (req, res) => {
+  const { name } = req.query; // Access the name using query parameter `name`
   
     try {
       // Query your database using the player ID
       // This is a placeholder query; modify it according to your schema
-      const playerBatting_2024 = await pool.query(`SELECT * FROM "playerBatting_2024" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerPitching_2024 = await pool.query(`SELECT * FROM "playerPitching_2024" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerBatting_2023 = await pool.query(`SELECT * FROM "playerBatting_2023" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerPitching_2023 = await pool.query(`SELECT * FROM "playerPitching_2023" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerBatting_2022 = await pool.query(`SELECT * FROM "playerBatting_2022" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerPitching_2022 = await pool.query(`SELECT * FROM "playerPitching_2022" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerBatting_2021 = await pool.query(`SELECT * FROM "playerBatting_2021" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerPitching_2021 = await pool.query(`SELECT * FROM "playerPitching_2021" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerBatting_2020 = await pool.query(`SELECT * FROM "playerBatting_2020" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerPitching_2020 = await pool.query(`SELECT * FROM "playerPitching_2020" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerBatting_2019 = await pool.query(`SELECT * FROM "playerBatting_2019" WHERE "Name" = \'${firstName} ${lastName}\'`);
-      const playerPitching_2019 = await pool.query(`SELECT * FROM "playerPitching_2019" WHERE "Name" = \'${firstName} ${lastName}\'`);
+      const playerBatting_2024 = await pool.query(`SELECT * FROM "playerBatting_2024" WHERE "Name" = \'${name}\'`);
+      const playerPitching_2024 = await pool.query(`SELECT * FROM "playerPitching_2024" WHERE "Name" = \'${name} \'`);
+      const playerBatting_2023 = await pool.query(`SELECT * FROM "playerBatting_2023" WHERE "Name" = \'${name}\'`);
+      const playerPitching_2023 = await pool.query(`SELECT * FROM "playerPitching_2023" WHERE "Name" = \'${name}\'`);
+      const playerBatting_2022 = await pool.query(`SELECT * FROM "playerBatting_2022" WHERE "Name" = \'${name}\'`);
+      const playerPitching_2022 = await pool.query(`SELECT * FROM "playerPitching_2022" WHERE "Name" = \'${name}\'`);
+      const playerBatting_2021 = await pool.query(`SELECT * FROM "playerBatting_2021" WHERE "Name" = \'${name}\'`);
+      const playerPitching_2021 = await pool.query(`SELECT * FROM "playerPitching_2021" WHERE "Name" = \'${name}\'`);
+      const playerBatting_2020 = await pool.query(`SELECT * FROM "playerBatting_2020" WHERE "Name" = \'${name}\'`);
+      const playerPitching_2020 = await pool.query(`SELECT * FROM "playerPitching_2020" WHERE "Name" = \'${name}\'`);
+      const playerBatting_2019 = await pool.query(`SELECT * FROM "playerBatting_2019" WHERE "Name" = \'${name}\'`);
+      const playerPitching_2019 = await pool.query(`SELECT * FROM "playerPitching_2019" WHERE "Name" = \'${name}\'`);
 
 
         // Aggregate data into one response
