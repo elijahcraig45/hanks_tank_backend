@@ -78,7 +78,7 @@ async function fetchColumnsFromTable(req, res, tableNamePrefix) {
         };
     const [job] = await bigquery.createQueryJob(options);
     console.log(`Job ${job.id} started.`);
-
+    console.log(query);
     const [rows] = await job.getQueryResults();
     const columns = rows.map(row => row.column_name);
     res.json(columns);
@@ -206,6 +206,63 @@ app.get('/api/playerData', async (req, res) => {
     console.error('Error fetching player stats:', error);
     res.status(500).json({ error: 'An error occurred while fetching player stats' });
   }
+});
+
+app.get('/api/statcast', async (req, res) => {
+const year = req.query.year || '2024';
+const position = req.query.position || 'batter';
+const playerId = req.query.playerId;
+const p_throws = req.query.p_throws || '';
+const stands = req.query.stands || '';
+const pitch_type = req.query.pitch_type || '';
+const events = req.query.events || '';
+const orderBy = req.query.order || 'game_date'; // Renamed highest to orderByField
+const limit = req.query.limit || '500'; // Renamed highest to orderByField
+
+const requestedParams = ["game_date", "pitch_type", "release_speed", "batter", "pitcher", "events", "description", "spin_dir", "zone", "des", "stand", "p_throws", "home_team", "away_team", "hit_location", "bb_type", "balls", "strikes", "type", "plate_x", "plate_z", "on_3b", "on_2b", "on_1b", "outs_when_up", "inning", "hit_distance_sc", "launch_speed", "launch_angle", "release_spin_rate", "estimated_ba_using_speedangle", "estimated_woba_using_speedangle", "woba_value", "babip_value", "pitch_number", "home_score", "away_score", "bat_speed", "swing_length"];
+
+let selectParams = requestedParams.join(', ');
+const tableName = `${year}_statcast`;
+let query = `SELECT ${selectParams} FROM \`mlb-414201.MLB_data.${tableName}\` WHERE 1 = 1`;
+
+if (position === 'batter' || position === 'pitcher') {
+  query += ` AND ${position} = ${playerId}`;
+}
+
+if (p_throws !== '') {
+  query += ` AND p_throws = '${p_throws}'`;
+}
+
+if (stands !== '') {
+  query += ` AND stand = '${stands}'`;
+}
+
+if (pitch_type !== '') {
+  query += ` AND pitch_type = '${pitch_type}'`;
+}
+
+if (events !== '') {
+  query += ` AND events = '${events}'`;
+}
+
+query += ` ORDER BY ${orderBy} DESC
+  LIMIT ${limit};`;
+try {
+  console.log(query);
+  const options = {
+      query: query,
+      location: 'us-east1',
+  };
+const [job] = await bigquery.createQueryJob(options);
+console.log(`Job ${job.id} started.`);
+
+const [rows] = await job.getQueryResults();
+
+res.json(rows);
+} catch (error) {
+console.error('Error executing query', error);
+res.status(500).send('Internal Server Error');
+}
 });
 
 
