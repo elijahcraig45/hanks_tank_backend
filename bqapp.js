@@ -3,8 +3,7 @@ const express = require('express');
 const { BigQuery } = require('@google-cloud/bigquery');
 const { Storage } = require('@google-cloud/storage');
 const cors = require('cors');
-const fs = require('fs');
-const { log } = require('console');
+const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 8080;
 
@@ -190,102 +189,25 @@ app.get('/api/teamData', async (req, res) => {
   }
 });
 
-app.get('/api/playerStats/', async (req, res) => {
-  const { name } = req.query;
-
+app.get('/api/playerData', async (req, res) => {
   try {
-      // Construct table names
-      const tableNames = [
-          `2024_playerBatting`,
-          `2024_playerPitching`,
-          `2023_playerBatting`,
-          `2023_playerPitching`,
-          `2022_playerBatting`,
-          `2022_PlayerPitching`,
-          `2021_playerBatting`,
-          `2021_PlayerPitching`,
-          `2020_playerBatting`,
-          `2020_PlayerPitching`,
-          `2019_playerBatting`,
-          `2019_PlayerPitching`
-      ];
+    const playerId = req.query.playerId;
+    const position = req.query.position || '';
 
-      // Create an array to hold all the query promises
-      const queryPromises = tableNames.map(async tableName => {
-          const query = `SELECT * FROM \`mlb-414201.MLB_data.${tableName}\` WHERE Name = '${name}'`;
-          console.log(query);
-          const options = {
-              query: query,
-              location: 'us-east1',
-          };
-          const [job] = await bigquery.createQueryJob(options);
-          console.log(`Job ${job.id} started.`);
-          const [rows] = await job.getQueryResults();
-          return rows;
-      });
+    if (playerId.length < 1) {
+      return res.status(400).json({ error: 'Player ID is required' });
+    }
 
-      // Wait for all queries to finish
-      const allData = await Promise.all(queryPromises);
-      // Combine all the data into a single object
-      const responseData = {
-          playerBatting_2024: allData[0],
-          playerPitching_2024: allData[1],
-          playerBatting_2023: allData[2],
-          playerPitching_2023: allData[3],
-          playerBatting_2022: allData[4],
-          playerPitching_2022: allData[5],
-          playerBatting_2021: allData[6],
-          playerPitching_2021: allData[7],
-          playerBatting_2020: allData[8],
-          playerPitching_2020: allData[9],
-          playerBatting_2019: allData[10],
-          playerPitching_2019: allData[11],
-      };
+    const url = `https://www.fangraphs.com/api/players/stats?playerid=${playerId}&position=${position}`;
 
-      res.json(responseData);
+    const response = await axios.get(url);
+    res.json(response.data);
   } catch (error) {
-      console.error('Error executing query', error);
-      res.status(500).send('Internal Server Error');
+    console.error('Error fetching player stats:', error);
+    res.status(500).json({ error: 'An error occurred while fetching player stats' });
   }
 });
 
-
-// const pythonEnvPath = '/home/henrycraig/csvkit_env/bin/python3';
-
-
-// app.get('/api/player-statcast/:firstName/:lastName', async (req, res) => {
-//   const { firstName, lastName } = req.params;
-
-//   // Use the Python executable from the virtual environment
-//   const scriptPath = '/home/henrycraig/mlb_pi/getPlayerID.py'; // Make sure to use the correct path
-//   exec(`${pythonEnvPath} ${scriptPath} "${firstName}" "${lastName}"`, async (error, stdout, stderr) => {
-//     if (error) {
-//       console.error(`exec error: ${error}`);
-//       return res.status(500).send('Internal Server Error');
-//     }
-//     if (stderr) {
-//       console.error(`stderr: ${stderr}`);
-//       return res.status(404).send('Player not found');
-//     }
-//     const playerId = stdout.trim();
-//     try {
-//       // Query your database using the player ID
-//       // This is a placeholder query; modify it according to your schema
-//       const statcast_batting = await pool.query('SELECT * FROM "statcast_2024" WHERE "batter" = $1', [playerId]);
-//       const statcast_pitching = await pool.query('SELECT * FROM "statcast_2024" WHERE "pitcher" = $1', [playerId]);
-//         // Aggregate data into one response
-//   const responseData = {
-//     statcastBatting: statcast_batting.rows,
-//     statcastPitching: statcast_pitching.rows
-// };
-
-// res.json(responseData);
-//     } catch (dbError) {
-//       console.error(`Database error: ${dbError}`);
-//       res.status(500).send('Database query failed');
-//     }
-//   });
-// });
 
 
 // MLB News endpoint
