@@ -20,7 +20,7 @@ app.get('/', (req, res) => {
 
 // Generic function to fetch data based on year and table name
 async function fetchDataFromTable(req, res, tableNamePrefix) {
-  const year = req.query.year || '2024'; // Default to 2023 if no year is provided
+  const year = req.query.year || '2025'; // Default to 2025 if no year is provided
   const tableName = `"${tableNamePrefix}_${year}"`; // Construct table name
   try {
     const queryResult = await pool.query(`SELECT * FROM ${tableName}`);
@@ -60,19 +60,19 @@ app.get('/api/Standings', (req, res) => {
 // Aggregated Team Data endpoint
 app.get('/api/teamData', async (req, res) => {
   const teamAbbr = req.query.teamAbbr || 'ATL'; // Default to 'ATL' if no team abbreviation is provided
-  const year = req.query.year || '2024'; // Default to 2024 if no year is provided
+  const year = req.query.year || '2025'; // Default to 2025 if no year is provided
   const teamTableSuffix = `team_schedule_and_record_${teamAbbr}_${year}`;
 
   try {
       // Fetch team batting stats
+      const teamBatting_2025 = await pool.query(`SELECT * FROM "teamBatting_2025" WHERE "Team" = '${teamAbbr}'`);
+      // Fetch team pitching stats
+      const teamPitching_2025 = await pool.query(`SELECT * FROM "teamPitching_2025" WHERE "Team" = '${teamAbbr}'`);
+
+      // Fetch team batting stats
       const teamBatting_2024 = await pool.query(`SELECT * FROM "teamBatting_2024" WHERE "Team" = '${teamAbbr}'`);
       // Fetch team pitching stats
       const teamPitching_2024 = await pool.query(`SELECT * FROM "teamPitching_2024" WHERE "Team" = '${teamAbbr}'`);
-
-      // Fetch team batting stats
-      const teamBatting_2023 = await pool.query(`SELECT * FROM "teamBatting_2023" WHERE "Team" = '${teamAbbr}'`);
-      // Fetch team pitching stats
-      const teamPitching_2023 = await pool.query(`SELECT * FROM "teamPitching_2023" WHERE "Team" = '${teamAbbr}'`);
 
       // Fetch team batting stats
       const teamBatting_2022 = await pool.query(`SELECT * FROM "teamBatting_2022" WHERE "Team" = '${teamAbbr}'`);
@@ -94,19 +94,19 @@ app.get('/api/teamData', async (req, res) => {
       // Fetch team pitching stats
       const teamPitching_2019 = await pool.query(`SELECT * FROM "teamPitching_2019" WHERE "Team" = '${teamAbbr}'`);
       // Fetch top batters - this is an example, adjust according to your criteria
-      const topBatters = await pool.query(`SELECT * FROM "playerBatting_2024" WHERE "Team" = '${teamAbbr}' ORDER BY "AVG" DESC;`);
+      const topBatters = await pool.query(`SELECT * FROM "playerBatting_2025" WHERE "Team" = '${teamAbbr}' ORDER BY "AVG" DESC;`);
       
       // Fetch top pitchers - this is an example, adjust according to your criteria
-      const topPitchers = await pool.query(`SELECT * FROM "playerPitching_2024" WHERE "Team" = '${teamAbbr}' ORDER BY "ERA" ASC`);
+      const topPitchers = await pool.query(`SELECT * FROM "playerPitching_2025" WHERE "Team" = '${teamAbbr}' ORDER BY "ERA" ASC`);
       // Fetch team schedule and record
       const scheduleAndRecord = await pool.query(`SELECT * FROM "${teamTableSuffix}"`);
 
       // Aggregate data into one response
       const responseData = {
+          teamBatting_2025: teamBatting_2025.rows,
+          teamPitching_2025: teamPitching_2025.rows,
           teamBatting_2024: teamBatting_2024.rows,
           teamPitching_2024: teamPitching_2024.rows,
-          teamBatting_2023: teamBatting_2023.rows,
-          teamPitching_2023: teamPitching_2023.rows,
           teamBatting_2022: teamBatting_2022.rows,
           teamPitching_2022: teamPitching_2022.rows,
           teamBatting_2021: teamBatting_2021.rows,
@@ -148,8 +148,8 @@ app.get('/api/player-statcast/:firstName/:lastName', async (req, res) => {
     try {
       // Query your database using the player ID
       // This is a placeholder query; modify it according to your schema
-      const statcast_batting = await pool.query('SELECT * FROM "statcast_2024" WHERE "batter" = $1', [playerId]);
-      const statcast_pitching = await pool.query('SELECT * FROM "statcast_2024" WHERE "pitcher" = $1', [playerId]);
+      const statcast_batting = await pool.query('SELECT * FROM "statcast_2025" WHERE "batter" = $1', [playerId]);
+      const statcast_pitching = await pool.query('SELECT * FROM "statcast_2025" WHERE "pitcher" = $1', [playerId]);
         // Aggregate data into one response
   const responseData = {
     statcastBatting: statcast_batting.rows,
@@ -171,10 +171,10 @@ app.get('/api/player-stats/', async (req, res) => {
     try {
       // Query your database using the player ID
       // This is a placeholder query; modify it according to your schema
+      const playerBatting_2025 = await pool.query(`SELECT * FROM "playerBatting_2025" WHERE "Name" = \'${name}\'`);
+      const playerPitching_2025 = await pool.query(`SELECT * FROM "playerPitching_2025" WHERE "Name" = \'${name} \'`);
       const playerBatting_2024 = await pool.query(`SELECT * FROM "playerBatting_2024" WHERE "Name" = \'${name}\'`);
-      const playerPitching_2024 = await pool.query(`SELECT * FROM "playerPitching_2024" WHERE "Name" = \'${name} \'`);
-      const playerBatting_2023 = await pool.query(`SELECT * FROM "playerBatting_2023" WHERE "Name" = \'${name}\'`);
-      const playerPitching_2023 = await pool.query(`SELECT * FROM "playerPitching_2023" WHERE "Name" = \'${name}\'`);
+      const playerPitching_2024 = await pool.query(`SELECT * FROM "playerPitching_2024" WHERE "Name" = \'${name}\'`);
       const playerBatting_2022 = await pool.query(`SELECT * FROM "playerBatting_2022" WHERE "Name" = \'${name}\'`);
       const playerPitching_2022 = await pool.query(`SELECT * FROM "playerPitching_2022" WHERE "Name" = \'${name}\'`);
       const playerBatting_2021 = await pool.query(`SELECT * FROM "playerBatting_2021" WHERE "Name" = \'${name}\'`);
@@ -187,10 +187,10 @@ app.get('/api/player-stats/', async (req, res) => {
 
         // Aggregate data into one response
   const responseData = {
+    playerBatting_2025: playerBatting_2025.rows,
+    playerPitching_2025: playerPitching_2025.rows,
     playerBatting_2024: playerBatting_2024.rows,
     playerPitching_2024: playerPitching_2024.rows,
-    playerBatting_2023: playerBatting_2023.rows,
-    playerPitching_2023: playerPitching_2023.rows,
     playerBatting_2022: playerBatting_2022.rows,
     playerPitching_2022: playerPitching_2022.rows,
     playerBatting_2021: playerBatting_2021.rows,

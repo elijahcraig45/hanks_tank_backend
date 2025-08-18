@@ -63,7 +63,7 @@ def fetch_and_store_mlb_data(year):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2 or not sys.argv[1].isdigit():
-        fetch_and_store_mlb_data(2024)
+        fetch_and_store_mlb_data(2025)
     else:
         year = int(sys.argv[1])
         fetch_and_store_mlb_data(year)
