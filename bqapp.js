@@ -5,7 +5,9 @@ const { Storage } = require('@google-cloud/storage');
 const cors = require('cors');
 const axios = require('axios');
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.en// MLB News endpoint
+app.get('/api/braves-news', (req, res) => {
+  getJsonFromBucket('mlb_henry', '2025/braves_news.json')
 
 app.use(cors());
 
@@ -42,7 +44,7 @@ async function getJsonFromBucket(bucketName, fileName) {
 
 // Generic function to fetch data based on year and table name
 async function fetchDataFromTable(req, res, tableNamePrefix, limit=100) {
-  const year = req.query.year || '2024'; // Default to 2024 if no year is provided
+  const year = req.query.year || '2025'; // Default to 2025 if no year is provided
   const stats = req.query.stats || '*';
   const direction = req.query.direction || 'asc';
   const orderBy = req.query.orderBy || null;
@@ -68,7 +70,7 @@ async function fetchDataFromTable(req, res, tableNamePrefix, limit=100) {
 
 // Generic function for getting avaliable columns from a table
 async function fetchColumnsFromTable(req, res, tableNamePrefix) {
-  const year = req.query.year || '2024'; // Default to 2024 if no year is provided
+  const year = req.query.year || '2025'; // Default to 2025 if no year is provided
     const tableName = `${year}_${tableNamePrefix}`; // Construct table name
     try {
         const query = `SELECT column_name FROM \`mlb-414201.MLB_data.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name='${tableName}'`;
@@ -136,10 +138,10 @@ app.get('/api/teamData', async (req, res) => {
   try {
       // Construct table names
       const tableNames = [
+          `2025_teamBatting`,
+          `2025_teamPitching`,
           `2024_teamBatting`,
           `2024_teamPitching`,
-          `2023_teamBatting`,
-          `2023_teamPitching`,
           `2022_teamBatting`,
           `2022_teamPitching`,
           `2021_teamBatting`,
@@ -168,10 +170,10 @@ app.get('/api/teamData', async (req, res) => {
       const allData = await Promise.all(queryPromises);
       // Combine all the data into a single object
       const responseData = {
-          teamBatting_2024: allData[0],
-          teamPitching_2024: allData[1],
-          teamBatting_2023: allData[2],
-          teamPitching_2023: allData[3],
+          teamBatting_2025: allData[0],
+          teamPitching_2025: allData[1],
+          teamBatting_2024: allData[2],
+          teamPitching_2024: allData[3],
           teamBatting_2022: allData[4],
           teamPitching_2022: allData[5],
           teamBatting_2021: allData[6],
@@ -209,7 +211,7 @@ app.get('/api/playerData', async (req, res) => {
 });
 
 app.get('/api/statcast', async (req, res) => {
-const year = req.query.year || '2024';
+const year = req.query.year || '2025';
 const position = req.query.position || 'batter';
 const playerId = req.query.playerId;
 const p_throws = req.query.p_throws || '';
@@ -269,7 +271,7 @@ res.status(500).send('Internal Server Error');
 
 // MLB News endpoint
 app.get('/api/mlb-news', (req, res) => {
-  getJsonFromBucket('mlb_henry', '2024/mlb_news.json')
+  getJsonFromBucket('mlb_henry', '2025/mlb_news.json')
   .then(jsonData => {
     res.type('application/json');
     res.send(jsonData);

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-CSV_DIR="/home/henrycraig/mlb_pi/data/2024"
-DB_NAME="mlb_2024"
+CSV_DIR="/home/henrycraig/mlb_pi/data/2025"
+DB_NAME="mlb_2025"
 DB_USER="mlb"
 DB_PASSWORD="password"
 source "$HOME/csvkit_env/bin/activate"
