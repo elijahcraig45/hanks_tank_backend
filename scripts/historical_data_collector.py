@@ -21,13 +21,14 @@ class MLBHistoricalDataCollector:
         self.project_id = project_id
         self.dataset_id = dataset_id
         self.client = bigquery.Client(project=project_id)
-        self.years = [2021, 2022, 2023, 2024]
+        self.years = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
         
         # Create output directories
         os.makedirs("data/teams", exist_ok=True)
         os.makedirs("data/players", exist_ok=True)
         os.makedirs("data/games", exist_ok=True)
         os.makedirs("data/standings", exist_ok=True)
+        os.makedirs("data/rosters", exist_ok=True)
         
     def fetch_with_retry(self, url: str, max_retries: int = 3) -> Dict[Any, Any]:
         """Fetch data with retry logic"""
@@ -255,6 +256,178 @@ class MLBHistoricalDataCollector:
         
         return games
     
+    def get_player_stats(self, year: int) -> List[Dict]:
+        """Fetch player statistics for a given year"""
+        print(f"Fetching player stats for {year}...")
+        
+        all_player_stats = []
+        
+        # Get batting stats
+        batting_url = f"{self.base_url}/stats?stats=season&season={year}&sportId=1&group=hitting&gameType=R"
+        batting_data = self.fetch_with_retry(batting_url)
+        
+        for stat in batting_data.get('stats', []):
+            for split in stat.get('splits', []):
+                player = split.get('player', {})
+                team = split.get('team', {})
+                stats = split.get('stat', {})
+                
+                player_record = {
+                    'year': year,
+                    'player_id': player.get('id'),
+                    'player_name': player.get('fullName', ''),
+                    'first_name': player.get('firstName', ''),
+                    'last_name': player.get('lastName', ''),
+                    'team_id': team.get('id'),
+                    'team_name': team.get('name', ''),
+                    'stat_type': 'batting',
+                    'position': player.get('primaryPosition', {}).get('name', ''),
+                    'position_code': player.get('primaryPosition', {}).get('code', ''),
+                    'games_played': stats.get('gamesPlayed', 0),
+                    'plate_appearances': stats.get('plateAppearances', 0),
+                    'at_bats': stats.get('atBats', 0),
+                    'runs': stats.get('runs', 0),
+                    'hits': stats.get('hits', 0),
+                    'doubles': stats.get('doubles', 0),
+                    'triples': stats.get('triples', 0),
+                    'home_runs': stats.get('homeRuns', 0),
+                    'rbi': stats.get('rbi', 0),
+                    'stolen_bases': stats.get('stolenBases', 0),
+                    'caught_stealing': stats.get('caughtStealing', 0),
+                    'walks': stats.get('baseOnBalls', 0),
+                    'strikeouts': stats.get('strikeOuts', 0),
+                    'batting_avg': float(stats.get('avg', 0)),
+                    'obp': float(stats.get('obp', 0)),
+                    'slg': float(stats.get('slg', 0)),
+                    'ops': float(stats.get('ops', 0)),
+                    'total_bases': stats.get('totalBases', 0),
+                    'hit_by_pitch': stats.get('hitByPitch', 0),
+                    'sac_flies': stats.get('sacFlies', 0),
+                    'sac_bunts': stats.get('sacBunts', 0),
+                    'intentional_walks': stats.get('intentionalWalks', 0),
+                    'left_on_base': stats.get('leftOnBase', 0),
+                    'ground_outs': stats.get('groundOuts', 0),
+                    'air_outs': stats.get('airOuts', 0),
+                    'ground_into_double_play': stats.get('groundIntoDoublePlay', 0)
+                }
+                all_player_stats.append(player_record)
+        
+        time.sleep(2)  # Rate limiting between batting and pitching
+        
+        # Get pitching stats
+        pitching_url = f"{self.base_url}/stats?stats=season&season={year}&sportId=1&group=pitching&gameType=R"
+        pitching_data = self.fetch_with_retry(pitching_url)
+        
+        for stat in pitching_data.get('stats', []):
+            for split in stat.get('splits', []):
+                player = split.get('player', {})
+                team = split.get('team', {})
+                stats = split.get('stat', {})
+                
+                player_record = {
+                    'year': year,
+                    'player_id': player.get('id'),
+                    'player_name': player.get('fullName', ''),
+                    'first_name': player.get('firstName', ''),
+                    'last_name': player.get('lastName', ''),
+                    'team_id': team.get('id'),
+                    'team_name': team.get('name', ''),
+                    'stat_type': 'pitching',
+                    'position': player.get('primaryPosition', {}).get('name', ''),
+                    'position_code': player.get('primaryPosition', {}).get('code', ''),
+                    'games_played': stats.get('gamesPlayed', 0),
+                    'games_started': stats.get('gamesStarted', 0),
+                    'wins': stats.get('wins', 0),
+                    'losses': stats.get('losses', 0),
+                    'win_percentage': float(stats.get('winPercentage', 0)),
+                    'era': float(stats.get('era', 0)),
+                    'complete_games': stats.get('completeGames', 0),
+                    'shutouts': stats.get('shutouts', 0),
+                    'saves': stats.get('saves', 0),
+                    'save_opportunities': stats.get('saveOpportunities', 0),
+                    'holds': stats.get('holds', 0),
+                    'blown_saves': stats.get('blownSaves', 0),
+                    'innings_pitched': float(stats.get('inningsPitched', 0)),
+                    'hits_allowed': stats.get('hits', 0),
+                    'runs_allowed': stats.get('runs', 0),
+                    'earned_runs': stats.get('earnedRuns', 0),
+                    'home_runs_allowed': stats.get('homeRuns', 0),
+                    'walks_allowed': stats.get('baseOnBalls', 0),
+                    'strikeouts': stats.get('strikeOuts', 0),
+                    'whip': float(stats.get('whip', 0)),
+                    'batters_faced': stats.get('battersFaced', 0),
+                    'wild_pitches': stats.get('wildPitches', 0),
+                    'hit_batsmen': stats.get('hitBatsmen', 0),
+                    'balks': stats.get('balks', 0),
+                    'games_finished': stats.get('gamesFinished', 0),
+                    'quality_starts': stats.get('qualityStarts', 0),
+                    'strike_percentage': float(stats.get('strikePercentage', 0)),
+                    'strikeouts_per_nine': float(stats.get('strikeoutsPer9Inn', 0)),
+                    'walks_per_nine': float(stats.get('baseOnBallsPer9Inn', 0)),
+                    'hits_per_nine': float(stats.get('hitsPer9Inn', 0))
+                }
+                all_player_stats.append(player_record)
+        
+        return all_player_stats
+    
+    def get_team_rosters(self, year: int) -> List[Dict]:
+        """Fetch team rosters for a given year"""
+        print(f"Fetching team rosters for {year}...")
+        
+        all_roster_data = []
+        
+        # Get all teams first
+        teams = self.get_teams(year)
+        
+        for team in teams:
+            team_id = team['team_id']
+            print(f"  Fetching roster for {team['team_name']}...")
+            
+            try:
+                # Get roster for the team
+                roster_url = f"{self.base_url}/teams/{team_id}/roster?season={year}"
+                roster_data = self.fetch_with_retry(roster_url)
+                
+                for player in roster_data.get('roster', []):
+                    person = player.get('person', {})
+                    position = player.get('position', {})
+                    status = player.get('status', {})
+                    
+                    roster_record = {
+                        'year': year,
+                        'team_id': team_id,
+                        'team_name': team['team_name'],
+                        'player_id': person.get('id'),
+                        'player_name': person.get('fullName', ''),
+                        'first_name': person.get('firstName', ''),
+                        'last_name': person.get('lastName', ''),
+                        'jersey_number': player.get('jerseyNumber', ''),
+                        'position_name': position.get('name', ''),
+                        'position_code': position.get('code', ''),
+                        'position_type': position.get('type', ''),
+                        'status_code': status.get('code', ''),
+                        'status_description': status.get('description', ''),
+                        'birth_date': person.get('birthDate', ''),
+                        'birth_city': person.get('birthCity', ''),
+                        'birth_state_province': person.get('birthStateProvince', ''),
+                        'birth_country': person.get('birthCountry', ''),
+                        'height': person.get('height', ''),
+                        'weight': person.get('weight', 0),
+                        'bats': person.get('batSide', {}).get('code', ''),
+                        'throws': person.get('pitchHand', {}).get('code', ''),
+                        'debut_date': person.get('mlbDebutDate', ''),
+                        'active': person.get('active', True)
+                    }
+                    all_roster_data.append(roster_record)
+                
+                time.sleep(0.5)  # Small delay between team roster requests
+                
+            except Exception as e:
+                print(f"    Error fetching roster for team {team_id}: {e}")
+                continue
+        
+        return all_roster_data
+    
     def save_to_csv(self, data: List[Dict], filename: str):
         """Save data to CSV file"""
         if data:
@@ -292,6 +465,8 @@ class MLBHistoricalDataCollector:
         all_team_stats = []
         all_standings = []
         all_games = []
+        all_player_stats = []
+        all_rosters = []
         
         for year in self.years:
             print(f"\n=== Collecting data for {year} ===")
@@ -311,27 +486,45 @@ class MLBHistoricalDataCollector:
             all_standings.extend(standings)
             time.sleep(1)
             
-            # Collect games
-            games = self.get_schedule_games(year)
+            # Collect games (sample for large years to avoid timeout)
+            if year >= 2020:  # Full games for recent years
+                games = self.get_schedule_games(year)
+            else:  # Sample games for older years to reduce load
+                # Get games for just April-October to reduce API calls
+                games = self.get_schedule_games(year, f"{year}-04-01", f"{year}-10-31")
             all_games.extend(games)
-            time.sleep(2)  # Longer pause for games as it's a large dataset
+            time.sleep(2)
             
-            print(f"Year {year} complete: {len(teams)} teams, {len(team_stats)} team stats, {len(standings)} standings, {len(games)} games")
+            # Collect player stats
+            player_stats = self.get_player_stats(year)
+            all_player_stats.extend(player_stats)
+            time.sleep(3)  # Longer pause for player stats as it's heavy
+            
+            # Collect team rosters
+            rosters = self.get_team_rosters(year)
+            all_rosters.extend(rosters)
+            time.sleep(2)
+            
+            print(f"Year {year} complete: {len(teams)} teams, {len(team_stats)} team stats, {len(standings)} standings, {len(games)} games, {len(player_stats)} player stats, {len(rosters)} roster entries")
         
         # Save all data to CSV files
         print("\n=== Saving data to CSV files ===")
-        self.save_to_csv(all_teams, "data/teams/teams_2021_2024.csv")
-        self.save_to_csv(all_team_stats, "data/teams/team_stats_2021_2024.csv")
-        self.save_to_csv(all_standings, "data/standings/standings_2021_2024.csv")
-        self.save_to_csv(all_games, "data/games/games_2021_2024.csv")
+        self.save_to_csv(all_teams, "data/teams/teams_2015_2024.csv")
+        self.save_to_csv(all_team_stats, "data/teams/team_stats_2015_2024.csv")
+        self.save_to_csv(all_standings, "data/standings/standings_2015_2024.csv")
+        self.save_to_csv(all_games, "data/games/games_2015_2024.csv")
+        self.save_to_csv(all_player_stats, "data/players/player_stats_2015_2024.csv")
+        self.save_to_csv(all_rosters, "data/rosters/rosters_2015_2024.csv")
         
         # Upload to BigQuery
         print("\n=== Uploading to BigQuery ===")
         try:
-            self.upload_to_bigquery("data/teams/teams_2021_2024.csv", "teams_historical")
-            self.upload_to_bigquery("data/teams/team_stats_2021_2024.csv", "team_stats_historical")
-            self.upload_to_bigquery("data/standings/standings_2021_2024.csv", "standings_historical")
-            self.upload_to_bigquery("data/games/games_2021_2024.csv", "games_historical")
+            self.upload_to_bigquery("data/teams/teams_2015_2024.csv", "teams_historical")
+            self.upload_to_bigquery("data/teams/team_stats_2015_2024.csv", "team_stats_historical")
+            self.upload_to_bigquery("data/standings/standings_2015_2024.csv", "standings_historical")
+            self.upload_to_bigquery("data/games/games_2015_2024.csv", "games_historical")
+            self.upload_to_bigquery("data/players/player_stats_2015_2024.csv", "player_stats_historical")
+            self.upload_to_bigquery("data/rosters/rosters_2015_2024.csv", "rosters_historical")
             
             print("\n=== Data collection and upload complete! ===")
             
@@ -343,7 +536,7 @@ class MLBHistoricalDataCollector:
         """Verify data completeness in BigQuery"""
         print("\n=== Verifying Data Completeness ===")
         
-        tables = ['teams_historical', 'team_stats_historical', 'standings_historical', 'games_historical']
+        tables = ['teams_historical', 'team_stats_historical', 'standings_historical', 'games_historical', 'player_stats_historical', 'rosters_historical']
         
         for table in tables:
             try:
@@ -366,6 +559,27 @@ class MLBHistoricalDataCollector:
                 
             except Exception as e:
                 print(f"Error verifying {table}: {e}")
+        
+        # Additional verification for player data
+        try:
+            print(f"\n=== PLAYER STATS BREAKDOWN ===")
+            query = f"""
+            SELECT 
+                year,
+                stat_type,
+                COUNT(*) as player_count,
+                COUNT(DISTINCT player_id) as unique_players
+            FROM `{self.project_id}.{self.dataset_id}.player_stats_historical`
+            GROUP BY year, stat_type
+            ORDER BY year, stat_type
+            """
+            
+            results = self.client.query(query).result()
+            for row in results:
+                print(f"  {row.year} {row.stat_type}: {row.player_count:,} records ({row.unique_players:,} unique players)")
+                
+        except Exception as e:
+            print(f"Error verifying player stats breakdown: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description='Collect historical MLB data for BigQuery')

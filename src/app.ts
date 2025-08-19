@@ -4,6 +4,7 @@ import cors from 'cors';
 import { config } from './config/app';
 import { logger, logStartup } from './utils/logger';
 import hybridTeamsRoutes from './routes/hybrid-teams.routes';
+import legacyRoutes from './routes/legacy.routes';
 import { validateGCPConfig } from './config/gcp.config';
 
 const app = express();
@@ -50,6 +51,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/v2/teams', hybridTeamsRoutes); // Hybrid routes with intelligent data sourcing
+app.use('/api', legacyRoutes); // Legacy endpoints for backward compatibility
 
 // 404 handler
 app.use('*', (req, res) => {

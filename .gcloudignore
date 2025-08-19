@@ -1,0 +1,48 @@
+# Ignore development files but keep src/ for building
+.env
+.env.local
+.env.development
+.env.test
+build.sh
+deploy.sh
+
+# Ignore version control
+.git/
+.github/
+.gitignore
+
+# Ignore backup and temp files
+legacy_backup/
+*.backup
+*~
+*.tmp
+
+# Ignore test files
+test/
+tests/
+__tests__/
+*.test.*
+*.spec.*
+
+# Ignore development dependencies that aren't needed
+node_modules/.cache/
+.nyc_output/
+coverage/
+
+# Ignore editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Ignore package-lock.json to reduce size
+package-lock.json

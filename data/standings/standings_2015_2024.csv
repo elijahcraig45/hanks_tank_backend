@@ -1,0 +1,301 @@
+year,team_id,team_name,division_id,division_name,league_id,league_name,wins,losses,pct,games_back,wild_card_games_back,division_rank,league_rank,sport_rank,runs_scored,runs_allowed,run_differential,streak_type,streak_number,streak_code,last_updated
+2015,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,93,69,0.574,-,-,1,2,5,891,670,221,losses,2,L2,2023-05-19T16:58:54Z
+2015,115,Colorado Rockies,203,Unknown Division,104,Unknown League,68,94,0.42,24.0,29.0,5,11,25,737,844,-107,wins,1,W1,2021-06-11T04:55:10Z
+2015,135,San Diego Padres,203,Unknown Division,104,Unknown League,74,88,0.457,18.0,23.0,4,9,23,650,731,-81,losses,3,L3,2022-07-15T15:13:55Z
+2015,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,79,83,0.488,13.0,18.0,3,8,18,720,713,7,wins,1,W1,2022-07-15T15:32:40Z
+2015,137,San Francisco Giants,203,Unknown Division,104,Unknown League,84,78,0.519,8.0,13.0,2,6,12,696,627,69,losses,1,L1,2021-01-13T03:20:30Z
+2015,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,92,70,0.568,-,-,1,4,6,667,595,72,wins,4,W4,2023-06-26T12:48:59Z
+2015,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,64,98,0.395,36.0,33.0,5,14,29,640,754,-114,losses,1,L1,2024-08-19T14:33:25Z
+2015,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,68,94,0.42,32.0,29.0,4,12,26,655,737,-82,losses,4,L4,2023-08-02T15:50:14Z
+2015,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,98,64,0.605,2.0,+1.0,2,2,2,697,596,101,wins,1,W1,2023-08-02T15:50:10Z
+2015,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,100,62,0.617,-,-,1,1,1,647,525,122,losses,3,L3,2024-08-28T21:48:22Z
+2015,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,63,99,0.389,27.0,34.0,5,15,30,626,809,-183,wins,1,W1,2023-08-02T15:50:35Z
+2015,144,Atlanta Braves,204,Unknown Division,104,Unknown League,67,95,0.414,23.0,30.0,4,13,28,573,760,-187,wins,3,W3,2024-06-28T17:08:10Z
+2015,146,Miami Marlins,204,Unknown Division,104,Unknown League,71,91,0.438,19.0,26.0,3,10,24,613,678,-65,losses,1,L1,2024-09-24T20:59:25Z
+2015,120,Washington Nationals,204,Unknown Division,104,Unknown League,83,79,0.512,7.0,14.0,2,7,14,703,635,68,losses,1,L1,2023-08-02T15:50:38Z
+2015,121,New York Mets,204,Unknown Division,104,Unknown League,90,72,0.556,-,-,1,5,7,683,613,70,wins,1,W1,2024-08-28T21:32:48Z
+2015,112,Chicago Cubs,205,Unknown Division,104,Unknown League,97,65,0.599,3.0,-,3,3,3,689,608,81,wins,8,W8,2024-08-28T21:46:11Z
+2015,136,Seattle Mariners,200,Unknown Division,103,Unknown League,76,86,0.469,12.0,10.0,4,13,21,656,726,-70,wins,1,W1,2024-08-28T21:31:19Z
+2015,133,Oakland Athletics,200,Unknown Division,103,Unknown League,68,94,0.42,20.0,18.0,5,15,27,694,729,-35,losses,1,L1,2024-08-28T21:34:22Z
+2015,147,New York Yankees,201,Unknown Division,103,Unknown League,87,75,0.537,6.0,+1.0,2,4,9,764,698,66,losses,3,L3,2024-08-28T21:52:50Z
+2015,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,81,81,0.5,12.0,5.0,3,9,16,713,693,20,wins,5,W5,2024-08-28T18:27:09Z
+2015,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,80,82,0.494,13.0,6.0,4,10,17,644,642,2,wins,2,W2,2023-05-19T16:57:58Z
+2015,111,Boston Red Sox,201,Unknown Division,103,Unknown League,78,84,0.481,15.0,8.0,5,11,19,748,753,-5,losses,4,L4,2024-08-28T21:52:57Z
+2015,142,Minnesota Twins,202,Unknown Division,103,Unknown League,83,79,0.512,12.0,3.0,2,7,13,696,700,-4,losses,3,L3,2024-08-28T21:49:27Z
+2015,118,Kansas City Royals,202,Unknown Division,103,Unknown League,95,67,0.586,-,-,1,1,4,724,641,83,wins,5,W5,2023-09-26T21:29:58Z
+2015,145,Chicago White Sox,202,Unknown Division,103,Unknown League,76,86,0.469,19.0,10.0,4,12,20,622,701,-79,losses,1,L1,2024-08-28T21:50:35Z
+2015,116,Detroit Tigers,202,Unknown Division,103,Unknown League,74,87,0.46,20.5,11.5,5,14,22,689,803,-114,wins,1,W1,2024-08-28T21:50:41Z
+2015,140,Texas Rangers,200,Unknown Division,103,Unknown League,88,74,0.543,-,-,1,3,8,751,733,18,wins,1,W1,2024-08-28T21:29:50Z
+2015,117,Houston Astros,200,Unknown Division,103,Unknown League,86,76,0.531,2.0,-,2,5,10,729,618,111,losses,1,L1,2024-08-28T21:22:10Z
+2015,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,85,77,0.525,3.0,1.0,3,6,11,661,675,-14,losses,1,L1,2024-08-28T21:28:39Z
+2015,114,Cleveland Indians,202,Unknown Division,103,Unknown League,81,80,0.503,13.5,4.5,3,8,15,669,640,29,wins,3,W3,2024-08-28T21:47:21Z
+2016,146,Miami Marlins,204,Unknown Division,104,Unknown League,79,82,0.491,15.5,7.5,3,7,17,655,682,-27,losses,2,L2,2021-12-01T15:56:50Z
+2016,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,86,76,0.531,17.5,1.0,2,6,13,779,712,67,wins,4,W4,2021-12-01T15:56:26Z
+2016,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,71,91,0.438,24.0,16.0,4,11,23,610,796,-186,wins,1,W1,2021-01-13T03:21:44Z
+2016,144,Atlanta Braves,204,Unknown Division,104,Unknown League,68,93,0.422,26.5,18.5,5,13,26,649,779,-130,wins,2,W2,2021-12-01T15:56:50Z
+2016,112,Chicago Cubs,205,Unknown Division,104,Unknown League,103,58,0.64,-,-,1,1,1,808,556,252,wins,1,W1,2021-12-01T15:57:01Z
+2016,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,78,83,0.484,25.0,8.5,3,8,18,729,758,-29,losses,3,L3,2021-12-01T15:57:00Z
+2016,135,San Diego Padres,203,Unknown Division,104,Unknown League,68,94,0.42,23.0,19.0,5,15,28,686,770,-84,losses,4,L4,2021-12-01T15:57:15Z
+2016,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,68,94,0.42,35.5,19.0,5,14,27,716,854,-138,losses,1,L1,2021-12-01T15:53:51Z
+2016,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,91,71,0.562,-,-,1,3,6,725,638,87,losses,3,L3,2023-02-07T18:27:34Z
+2016,137,San Francisco Giants,203,Unknown Division,104,Unknown League,87,75,0.537,4.0,-,2,5,10,715,631,84,wins,4,W4,2021-12-01T15:56:25Z
+2016,115,Colorado Rockies,203,Unknown Division,104,Unknown League,75,87,0.463,16.0,12.0,3,9,20,845,860,-15,losses,2,L2,2023-02-07T18:27:30Z
+2016,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,69,93,0.426,22.0,18.0,4,12,24,752,890,-138,wins,3,W3,2021-12-01T15:55:35Z
+2016,121,New York Mets,204,Unknown Division,104,Unknown League,87,75,0.537,8.0,-,2,4,9,671,617,54,losses,1,L1,2021-12-01T15:54:01Z
+2016,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,73,89,0.451,30.5,14.0,4,10,22,671,733,-62,wins,2,W2,2021-12-01T15:54:51Z
+2016,120,Washington Nationals,204,Unknown Division,104,Unknown League,95,67,0.586,-,-,1,2,3,763,612,151,wins,2,W2,2021-12-01T15:54:26Z
+2016,118,Kansas City Royals,202,Unknown Division,103,Unknown League,81,81,0.5,13.5,8.0,3,10,16,675,712,-37,losses,4,L4,2021-12-01T15:56:43Z
+2016,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,74,88,0.457,21.0,15.0,4,12,21,717,727,-10,wins,1,W1,2021-12-01T15:48:27Z
+2016,133,Oakland Athletics,200,Unknown Division,103,Unknown League,69,93,0.426,26.0,20.0,5,13,25,653,761,-108,wins,2,W2,2022-01-21T21:30:10Z
+2016,111,Boston Red Sox,201,Unknown Division,103,Unknown League,93,69,0.574,-,-,1,3,5,878,694,184,losses,2,L2,2022-01-21T21:30:17Z
+2016,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,89,73,0.549,4.0,-,2,4,7,744,715,29,wins,1,W1,2021-12-01T15:54:16Z
+2016,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,89,73,0.549,4.0,-,3,5,8,759,666,93,wins,2,W2,2021-12-01T15:49:00Z
+2016,147,New York Yankees,201,Unknown Division,103,Unknown League,84,78,0.519,9.0,5.0,4,9,15,680,702,-22,losses,1,L1,2021-07-30T17:40:54Z
+2016,114,Cleveland Indians,202,Unknown Division,103,Unknown League,94,67,0.584,-,-,1,2,4,777,676,101,wins,3,W3,2022-08-11T00:53:29Z
+2016,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,68,94,0.42,25.0,21.0,5,14,29,672,713,-41,wins,2,W2,2022-07-31T01:14:45Z
+2016,145,Chicago White Sox,202,Unknown Division,103,Unknown League,78,84,0.481,16.5,11.0,4,11,19,686,715,-29,losses,2,L2,2021-12-01T15:53:23Z
+2016,142,Minnesota Twins,202,Unknown Division,103,Unknown League,59,103,0.364,35.5,30.0,5,15,30,722,889,-167,wins,2,W2,2022-08-11T00:53:25Z
+2016,140,Texas Rangers,200,Unknown Division,103,Unknown League,95,67,0.586,-,-,1,1,2,765,757,8,losses,2,L2,2022-01-21T21:30:54Z
+2016,136,Seattle Mariners,200,Unknown Division,103,Unknown League,86,76,0.531,9.0,3.0,2,7,12,768,707,61,losses,2,L2,2021-12-01T15:55:46Z
+2016,117,Houston Astros,200,Unknown Division,103,Unknown League,84,78,0.519,11.0,5.0,3,8,14,724,701,23,losses,1,L1,2022-01-21T21:30:50Z
+2016,116,Detroit Tigers,202,Unknown Division,103,Unknown League,86,75,0.534,8.0,2.5,2,6,11,750,721,29,losses,2,L2,2022-07-31T01:14:49Z
+2017,144,Atlanta Braves,204,Unknown Division,104,Unknown League,72,90,0.444,25.0,15.0,3,10,23,732,821,-89,wins,1,W1,2024-08-01T19:21:51Z
+2017,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,86,76,0.531,6.0,1.0,2,6,10,732,697,35,wins,1,W1,2021-06-29T18:53:10Z
+2017,121,New York Mets,204,Unknown Division,104,Unknown League,70,92,0.432,27.0,17.0,4,12,25,735,863,-128,losses,1,L1,2024-06-28T17:43:03Z
+2017,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,66,96,0.407,31.0,21.0,5,14,28,690,782,-92,wins,1,W1,2021-11-13T22:07:55Z
+2017,112,Chicago Cubs,205,Unknown Division,104,Unknown League,92,70,0.568,-,-,1,4,7,822,695,127,losses,1,L1,2021-07-30T17:36:49Z
+2017,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,83,79,0.512,9.0,4.0,3,7,12,761,705,56,losses,1,L1,2023-08-14T17:43:18Z
+2017,137,San Francisco Giants,203,Unknown Division,104,Unknown League,64,98,0.395,40.0,23.0,5,15,30,639,776,-137,wins,1,W1,2023-02-08T22:08:35Z
+2017,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,68,94,0.42,24.0,19.0,5,13,26,753,869,-116,wins,1,W1,2021-01-13T03:17:07Z
+2017,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,104,58,0.642,-,-,1,1,1,770,580,190,wins,2,W2,2023-08-14T17:43:15Z
+2017,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,93,69,0.574,11.0,+6.0,2,3,5,812,659,153,wins,1,W1,2021-10-18T15:49:45Z
+2017,115,Colorado Rockies,203,Unknown Division,104,Unknown League,87,75,0.537,17.0,-,3,5,9,824,757,67,losses,2,L2,2023-08-31T21:42:08Z
+2017,135,San Diego Padres,203,Unknown Division,104,Unknown League,71,91,0.438,33.0,16.0,4,11,24,604,816,-212,losses,1,L1,2023-02-08T22:08:40Z
+2017,146,Miami Marlins,204,Unknown Division,104,Unknown League,77,85,0.475,20.0,10.0,2,8,18,778,822,-44,losses,1,L1,2024-08-01T19:21:45Z
+2017,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,75,87,0.463,17.0,12.0,4,9,22,668,731,-63,wins,2,W2,2023-08-02T15:51:15Z
+2017,120,Washington Nationals,204,Unknown Division,104,Unknown League,97,65,0.599,-,-,1,2,4,819,672,147,losses,2,L2,2021-06-11T04:53:40Z
+2017,142,Minnesota Twins,202,Unknown Division,103,Unknown League,85,77,0.525,17.0,-,2,5,11,815,788,27,wins,1,W1,2022-01-21T21:31:29Z
+2017,140,Texas Rangers,200,Unknown Division,103,Unknown League,78,84,0.481,23.0,7.0,4,10,17,799,816,-17,losses,1,L1,2022-01-21T21:33:10Z
+2017,111,Boston Red Sox,201,Unknown Division,103,Unknown League,93,69,0.574,-,-,1,3,6,785,668,117,losses,1,L1,2021-01-13T03:16:22Z
+2017,147,New York Yankees,201,Unknown Division,103,Unknown League,91,71,0.562,2.0,+6.0,2,4,8,858,660,198,losses,1,L1,2024-12-04T17:19:11Z
+2017,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,80,82,0.494,13.0,5.0,3,8,15,694,704,-10,wins,4,W4,2021-12-14T16:30:55Z
+2017,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,76,86,0.469,17.0,9.0,4,11,19,693,784,-91,wins,1,W1,2025-07-21T22:12:40Z
+2017,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,75,87,0.463,18.0,10.0,5,12,20,743,841,-98,losses,5,L5,2025-07-21T22:12:35Z
+2017,114,Cleveland Indians,202,Unknown Division,103,Unknown League,102,60,0.63,-,-,1,1,2,818,564,254,wins,1,W1,2023-08-14T17:43:48Z
+2017,133,Oakland Athletics,200,Unknown Division,103,Unknown League,75,87,0.463,26.0,10.0,5,13,21,739,826,-87,wins,1,W1,2021-11-13T22:08:40Z
+2017,118,Kansas City Royals,202,Unknown Division,103,Unknown League,80,82,0.494,22.0,5.0,3,6,13,702,791,-89,losses,1,L1,2021-12-14T16:30:56Z
+2017,145,Chicago White Sox,202,Unknown Division,103,Unknown League,67,95,0.414,35.0,18.0,4,14,27,706,820,-114,losses,1,L1,2023-08-14T17:43:45Z
+2017,116,Detroit Tigers,202,Unknown Division,103,Unknown League,64,98,0.395,38.0,21.0,5,15,29,735,894,-159,losses,1,L1,2021-11-13T22:06:02Z
+2017,117,Houston Astros,200,Unknown Division,103,Unknown League,101,61,0.623,-,-,1,2,3,896,700,196,wins,1,W1,2023-09-27T22:37:55Z
+2017,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,80,82,0.494,21.0,5.0,2,7,14,710,709,1,wins,1,W1,2023-05-19T17:03:08Z
+2017,136,Seattle Mariners,200,Unknown Division,103,Unknown League,78,84,0.481,23.0,7.0,3,9,16,750,772,-22,losses,1,L1,2021-11-13T22:06:41Z
+2018,120,Washington Nationals,204,Unknown Division,104,Unknown League,82,80,0.506,8.0,8.5,2,9,16,771,682,89,losses,1,L1,2024-03-29T04:26:55Z
+2018,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,80,82,0.494,10.0,10.5,3,10,18,677,728,-51,wins,2,W2,2024-03-30T02:45:25Z
+2018,121,New York Mets,204,Unknown Division,104,Unknown League,77,85,0.475,13.0,13.5,4,11,20,676,707,-31,wins,2,W2,2024-06-28T17:50:49Z
+2018,146,Miami Marlins,204,Unknown Division,104,Unknown League,63,98,0.391,26.5,27.0,5,15,27,589,809,-220,losses,2,L2,2024-10-24T19:18:57Z
+2018,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,96,67,0.589,-,-,1,1,5,754,659,95,wins,8,W8,2025-04-16T00:28:08Z
+2018,112,Chicago Cubs,205,Unknown Division,104,Unknown League,95,68,0.583,1.0,+4.0,2,2,6,761,645,116,losses,1,L1,2024-09-24T17:36:55Z
+2018,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,67,95,0.414,28.5,23.5,5,13,23,696,819,-123,losses,1,L1,2024-03-29T04:01:35Z
+2018,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,82,79,0.509,13.0,8.0,4,7,14,692,693,-1,wins,1,W1,2025-04-16T00:28:00Z
+2018,135,San Diego Padres,203,Unknown Division,104,Unknown League,66,96,0.407,25.5,24.5,5,14,25,617,767,-150,wins,1,W1,2024-10-24T19:18:50Z
+2018,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,92,71,0.564,-,-,1,3,7,804,610,194,wins,4,W4,2024-03-28T21:27:29Z
+2018,115,Colorado Rockies,203,Unknown Division,104,Unknown League,91,72,0.558,1.0,-,2,4,9,780,745,35,losses,1,L1,2021-11-23T01:29:21Z
+2018,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,82,80,0.506,9.5,8.5,3,8,15,693,644,49,losses,1,L1,2024-03-29T19:29:45Z
+2018,144,Atlanta Braves,204,Unknown Division,104,Unknown League,90,72,0.556,-,-,1,5,10,759,657,102,losses,2,L2,2024-03-29T19:14:15Z
+2018,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,88,74,0.543,7.5,2.5,3,6,13,759,691,68,losses,1,L1,2021-11-23T00:06:25Z
+2018,137,San Francisco Giants,203,Unknown Division,104,Unknown League,73,89,0.451,18.5,17.5,4,12,21,603,699,-96,losses,4,L4,2024-10-24T19:21:51Z
+2018,140,Texas Rangers,200,Unknown Division,103,Unknown League,67,95,0.414,36.0,30.0,5,11,24,737,848,-111,losses,3,L3,2024-04-11T17:32:00Z
+2018,136,Seattle Mariners,200,Unknown Division,103,Unknown League,89,73,0.549,14.0,8.0,3,7,12,677,711,-34,wins,3,W3,2024-10-24T19:17:41Z
+2018,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,80,82,0.494,23.0,17.0,4,8,17,721,722,-1,wins,1,W1,2024-03-28T22:10:10Z
+2018,111,Boston Red Sox,201,Unknown Division,103,Unknown League,108,54,0.667,-,-,1,1,1,876,647,229,wins,1,W1,2022-01-21T18:46:25Z
+2018,147,New York Yankees,201,Unknown Division,103,Unknown League,100,62,0.617,8.0,+3.0,2,3,3,851,669,182,losses,1,L1,2023-08-11T15:23:25Z
+2018,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,90,72,0.556,18.0,7.0,3,6,11,716,646,70,wins,2,W2,2025-04-16T00:29:41Z
+2018,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,47,115,0.29,61.0,50.0,5,15,30,622,892,-270,wins,1,W1,2024-03-29T20:58:00Z
+2018,114,Cleveland Indians,202,Unknown Division,103,Unknown League,91,71,0.562,-,-,1,5,8,818,648,170,wins,1,W1,2024-05-22T15:24:10Z
+2018,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,73,89,0.451,35.0,24.0,4,10,22,709,832,-123,losses,2,L2,2025-04-16T00:29:35Z
+2018,116,Detroit Tigers,202,Unknown Division,103,Unknown League,64,98,0.395,27.0,33.0,3,12,26,630,796,-166,losses,5,L5,2024-05-22T17:30:34Z
+2018,145,Chicago White Sox,202,Unknown Division,103,Unknown League,62,100,0.383,29.0,35.0,4,13,28,656,848,-192,losses,5,L5,2023-09-14T14:14:29Z
+2018,118,Kansas City Royals,202,Unknown Division,103,Unknown League,58,104,0.358,33.0,39.0,5,14,29,638,833,-195,losses,1,L1,2023-09-14T14:18:47Z
+2018,117,Houston Astros,200,Unknown Division,103,Unknown League,103,59,0.636,-,-,1,2,2,797,534,263,losses,1,L1,2024-10-24T19:17:35Z
+2018,133,Oakland Athletics,200,Unknown Division,103,Unknown League,97,65,0.599,6.0,-,2,4,4,813,674,139,losses,1,L1,2024-10-24T19:21:45Z
+2018,142,Minnesota Twins,202,Unknown Division,103,Unknown League,78,84,0.481,13.0,19.0,2,9,19,738,775,-37,wins,6,W6,2024-10-24T19:15:55Z
+2019,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,89,73,0.549,2.0,-,2,5,11,769,766,3,losses,3,L3,2024-05-22T19:16:53Z
+2019,121,New York Mets,204,Unknown Division,104,Unknown League,86,76,0.531,11.0,3.0,3,6,12,791,737,54,wins,3,W3,2021-11-13T20:56:51Z
+2019,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,81,81,0.5,16.0,8.0,4,9,16,774,794,-20,losses,1,L1,2023-11-16T22:11:40Z
+2019,146,Miami Marlins,204,Unknown Division,104,Unknown League,57,105,0.352,40.0,32.0,5,15,28,615,808,-193,wins,1,W1,2024-04-18T01:29:50Z
+2019,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,91,71,0.562,-,-,1,4,10,764,662,102,wins,1,W1,2022-06-24T17:29:51Z
+2019,112,Chicago Cubs,205,Unknown Division,104,Unknown League,84,78,0.519,7.0,5.0,3,8,15,814,717,97,losses,1,L1,2023-04-05T16:30:10Z
+2019,120,Washington Nationals,204,Unknown Division,104,Unknown League,93,69,0.574,4.0,+4.0,2,3,9,873,724,149,wins,8,W8,2024-04-18T01:29:54Z
+2019,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,69,93,0.426,22.0,20.0,5,14,24,758,911,-153,losses,2,L2,2024-05-22T19:16:45Z
+2019,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,106,56,0.654,-,-,1,1,2,886,613,273,wins,7,W7,2024-05-22T17:16:16Z
+2019,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,85,77,0.525,21.0,4.0,2,7,13,813,743,70,wins,5,W5,2024-05-22T17:16:05Z
+2019,137,San Francisco Giants,203,Unknown Division,104,Unknown League,77,85,0.475,29.0,12.0,3,10,18,678,773,-95,losses,3,L3,2023-11-02T20:07:44Z
+2019,115,Colorado Rockies,203,Unknown Division,104,Unknown League,71,91,0.438,35.0,18.0,4,12,22,835,958,-123,wins,3,W3,2024-09-09T20:28:19Z
+2019,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,75,87,0.463,16.0,14.0,4,11,19,701,711,-10,wins,2,W2,2022-06-24T17:29:30Z
+2019,144,Atlanta Braves,204,Unknown Division,104,Unknown League,97,65,0.599,-,-,1,2,5,855,743,112,losses,3,L3,2024-09-09T20:28:10Z
+2019,135,San Diego Padres,203,Unknown Division,104,Unknown League,70,92,0.432,36.0,19.0,5,13,23,682,789,-107,losses,6,L6,2023-11-16T22:11:43Z
+2019,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,72,90,0.444,35.0,24.0,4,10,21,769,868,-99,losses,3,L3,2024-05-22T17:07:34Z
+2019,147,New York Yankees,201,Unknown Division,103,Unknown League,103,59,0.636,-,-,1,2,3,943,739,204,losses,2,L2,2024-05-21T20:44:07Z
+2019,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,96,66,0.593,7.0,-,2,5,7,769,656,113,losses,2,L2,2024-05-22T18:11:05Z
+2019,111,Boston Red Sox,201,Unknown Division,103,Unknown League,84,78,0.519,19.0,12.0,3,7,14,901,828,73,wins,1,W1,2024-03-30T03:15:30Z
+2019,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,67,95,0.414,36.0,29.0,4,12,26,726,828,-102,wins,2,W2,2024-03-29T19:49:49Z
+2019,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,54,108,0.333,49.0,42.0,5,14,29,729,981,-252,losses,1,L1,2024-05-21T20:44:00Z
+2019,142,Minnesota Twins,202,Unknown Division,103,Unknown League,101,61,0.623,-,-,1,3,4,939,754,185,losses,1,L1,2025-07-22T13:11:20Z
+2019,136,Seattle Mariners,200,Unknown Division,103,Unknown League,68,94,0.42,39.0,28.0,5,11,25,758,893,-135,wins,1,W1,2024-05-06T14:34:50Z
+2019,145,Chicago White Sox,202,Unknown Division,103,Unknown League,72,89,0.447,28.5,23.5,3,9,20,708,832,-124,wins,1,W1,2024-03-30T03:15:25Z
+2019,118,Kansas City Royals,202,Unknown Division,103,Unknown League,59,103,0.364,42.0,37.0,4,13,27,691,869,-178,wins,1,W1,2025-07-22T13:09:20Z
+2019,116,Detroit Tigers,202,Unknown Division,103,Unknown League,47,114,0.292,53.5,48.5,5,15,30,582,915,-333,losses,1,L1,2025-07-22T13:11:26Z
+2019,117,Houston Astros,200,Unknown Division,103,Unknown League,107,55,0.66,-,-,1,1,1,920,640,280,wins,3,W3,2024-10-24T19:14:41Z
+2019,133,Oakland Athletics,200,Unknown Division,103,Unknown League,97,65,0.599,10.0,+1.0,2,4,6,845,680,165,losses,1,L1,2023-04-10T23:28:56Z
+2019,140,Texas Rangers,200,Unknown Division,103,Unknown League,78,84,0.481,29.0,18.0,3,8,17,810,878,-68,wins,2,W2,2021-12-09T20:45:51Z
+2019,114,Cleveland Indians,202,Unknown Division,103,Unknown League,93,69,0.574,8.0,3.0,2,6,8,769,657,112,losses,5,L5,2024-10-24T19:14:35Z
+2020,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,28,32,0.467,7.0,1.0,3,10,18,306,311,-5,losses,3,L3,2024-12-20T21:35:00Z
+2020,121,New York Mets,204,Unknown Division,104,Unknown League,26,34,0.433,9.0,3.0,4,12,23,286,308,-22,losses,3,L3,2024-05-22T19:40:15Z
+2020,120,Washington Nationals,204,Unknown Division,104,Unknown League,26,34,0.433,9.0,3.0,5,13,24,293,301,-8,wins,3,W3,2024-12-04T17:11:57Z
+2020,112,Chicago Cubs,205,Unknown Division,104,Unknown League,34,26,0.567,-,-,1,4,9,265,240,25,wins,1,W1,2024-05-22T20:13:50Z
+2020,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,30,28,0.517,3.0,-,2,5,12,240,229,11,wins,1,W1,2024-05-22T21:13:25Z
+2020,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,31,29,0.517,3.0,+2.0,3,6,13,243,243,0,wins,1,W1,2024-05-22T20:54:55Z
+2020,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,43,17,0.717,-,-,1,1,1,349,213,136,wins,4,W4,2024-05-22T20:20:25Z
+2020,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,19,41,0.317,15.0,10.0,5,15,30,219,298,-79,losses,1,L1,2024-05-22T19:54:34Z
+2020,135,San Diego Padres,203,Unknown Division,104,Unknown League,37,23,0.617,6.0,-,2,2,3,325,241,84,wins,3,W3,2024-05-22T19:28:00Z
+2020,137,San Francisco Giants,203,Unknown Division,104,Unknown League,29,31,0.483,14.0,-,3,9,17,299,297,2,losses,3,L3,2024-05-22T18:24:50Z
+2020,115,Colorado Rockies,203,Unknown Division,104,Unknown League,26,34,0.433,17.0,3.0,4,11,20,275,353,-78,losses,1,L1,2024-05-22T20:20:28Z
+2020,146,Miami Marlins,204,Unknown Division,104,Unknown League,31,29,0.517,4.0,-,2,7,14,263,304,-41,wins,1,W1,2024-05-22T20:53:00Z
+2020,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,29,31,0.483,5.0,-,4,8,16,247,264,-17,losses,1,L1,2024-05-22T21:13:29Z
+2020,144,Atlanta Braves,204,Unknown Division,104,Unknown League,35,25,0.583,-,-,1,3,6,348,288,60,losses,2,L2,2024-12-20T21:35:05Z
+2020,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,25,35,0.417,18.0,4.0,5,14,25,269,295,-26,wins,1,W1,2024-05-22T19:39:44Z
+2020,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,26,34,0.433,10.0,1.0,4,11,22,294,321,-27,losses,3,L3,2025-01-08T21:03:20Z
+2020,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,40,20,0.667,-,-,1,1,2,289,229,60,wins,4,W4,2024-05-22T20:27:35Z
+2020,147,New York Yankees,201,Unknown Division,103,Unknown League,33,27,0.55,7.0,-,2,6,10,315,270,45,losses,1,L1,2024-05-22T18:04:53Z
+2020,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,32,28,0.533,8.0,+5.0,3,7,11,302,312,-10,losses,1,L1,2024-05-22T20:53:03Z
+2020,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,25,35,0.417,15.0,2.0,4,12,26,274,294,-20,wins,1,W1,2024-05-22T20:38:55Z
+2020,111,Boston Red Sox,201,Unknown Division,103,Unknown League,24,36,0.4,16.0,3.0,5,13,27,292,351,-59,wins,2,W2,2024-05-22T20:04:35Z
+2020,142,Minnesota Twins,202,Unknown Division,103,Unknown League,36,24,0.6,-,-,1,2,4,269,215,54,losses,1,L1,2024-05-22T18:28:54Z
+2020,140,Texas Rangers,200,Unknown Division,103,Unknown League,22,38,0.367,14.0,5.0,5,15,29,224,312,-88,wins,3,W3,2024-05-22T18:52:10Z
+2020,145,Chicago White Sox,202,Unknown Division,103,Unknown League,35,25,0.583,1.0,-,3,4,7,306,246,60,losses,1,L1,2024-05-22T19:36:11Z
+2020,118,Kansas City Royals,202,Unknown Division,103,Unknown League,26,34,0.433,10.0,1.0,4,10,21,248,272,-24,wins,1,W1,2024-05-22T20:54:59Z
+2020,116,Detroit Tigers,202,Unknown Division,103,Unknown League,23,35,0.397,12.0,3.0,5,14,28,249,318,-69,losses,1,L1,2024-05-22T19:36:05Z
+2020,133,Oakland Athletics,200,Unknown Division,103,Unknown League,36,24,0.6,-,-,1,3,5,274,232,42,wins,1,W1,2024-05-22T18:13:49Z
+2020,117,Houston Astros,200,Unknown Division,103,Unknown League,29,31,0.483,7.0,-,2,8,15,279,275,4,losses,3,L3,2024-05-22T19:39:40Z
+2020,136,Seattle Mariners,200,Unknown Division,103,Unknown League,27,33,0.45,9.0,-,3,9,19,254,303,-49,losses,1,L1,2025-01-08T21:03:23Z
+2020,114,Cleveland Indians,202,Unknown Division,103,Unknown League,35,25,0.583,1.0,-,2,5,8,248,209,39,wins,1,W1,2024-05-22T18:28:50Z
+2021,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,82,80,0.506,6.5,8.0,2,7,15,734,745,-11,losses,2,L2,2024-12-04T16:53:25Z
+2021,121,New York Mets,204,Unknown Division,104,Unknown League,77,85,0.475,11.5,13.0,3,9,20,636,668,-32,losses,2,L2,2024-05-22T21:12:40Z
+2021,146,Miami Marlins,204,Unknown Division,104,Unknown League,67,95,0.414,21.5,23.0,4,12,25,623,701,-78,wins,2,W2,2024-12-04T16:53:31Z
+2021,120,Washington Nationals,204,Unknown Division,104,Unknown League,65,97,0.401,23.5,25.0,5,13,26,724,820,-96,losses,5,L5,2024-05-22T21:00:10Z
+2021,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,95,67,0.586,-,-,1,3,5,738,623,115,losses,4,L4,2024-07-08T21:54:10Z
+2021,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,90,72,0.556,5.0,-,2,4,11,706,672,34,losses,2,L2,2024-05-22T21:15:40Z
+2021,137,San Francisco Giants,203,Unknown Division,104,Unknown League,107,55,0.66,-,-,1,1,1,804,594,210,wins,1,W1,2024-05-22T21:04:42Z
+2021,112,Chicago Cubs,205,Unknown Division,104,Unknown League,71,91,0.438,24.0,19.0,4,11,24,705,839,-134,wins,2,W2,2024-09-30T15:44:55Z
+2021,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,61,101,0.377,34.0,29.0,5,14,27,609,833,-224,losses,1,L1,2024-07-15T22:57:00Z
+2021,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,106,56,0.654,1.0,+16.0,2,2,2,830,561,269,wins,7,W7,2024-05-22T21:16:20Z
+2021,135,San Diego Padres,203,Unknown Division,104,Unknown League,79,83,0.488,28.0,11.0,3,8,17,729,708,21,losses,1,L1,2024-07-15T22:57:07Z
+2021,115,Colorado Rockies,203,Unknown Division,104,Unknown League,74,87,0.46,32.5,15.5,4,10,21,739,796,-57,losses,2,L2,2024-05-22T21:10:18Z
+2021,144,Atlanta Braves,204,Unknown Division,104,Unknown League,88,73,0.547,-,-,1,5,12,790,656,134,wins,2,W2,2024-07-10T20:20:35Z
+2021,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,83,79,0.512,12.0,7.0,3,6,14,786,760,26,wins,1,W1,2024-05-22T20:56:40Z
+2021,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,52,110,0.321,55.0,38.0,5,15,29,679,893,-214,wins,2,W2,2024-05-22T20:42:05Z
+2021,140,Texas Rangers,200,Unknown Division,103,Unknown League,60,102,0.37,35.0,32.0,5,14,28,625,815,-190,losses,1,L1,2024-05-22T21:18:32Z
+2021,133,Oakland Athletics,200,Unknown Division,103,Unknown League,86,76,0.531,9.0,6.0,3,8,13,743,687,56,losses,2,L2,2024-05-22T20:53:50Z
+2021,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,77,85,0.475,18.0,15.0,4,11,19,723,804,-81,wins,1,W1,2024-05-22T21:16:27Z
+2021,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,100,62,0.617,-,-,1,1,3,857,651,206,losses,1,L1,2024-05-22T20:53:25Z
+2021,111,Boston Red Sox,201,Unknown Division,103,Unknown League,92,70,0.568,8.0,-,2,4,7,829,749,80,wins,3,W3,2025-02-25T14:24:31Z
+2021,147,New York Yankees,201,Unknown Division,103,Unknown League,92,70,0.568,8.0,-,3,5,8,711,669,42,wins,1,W1,2025-03-05T17:14:31Z
+2021,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,52,110,0.321,48.0,40.0,5,15,30,659,956,-297,losses,3,L3,2025-03-05T17:14:25Z
+2021,145,Chicago White Sox,202,Unknown Division,103,Unknown League,93,69,0.574,-,-,1,3,6,796,636,160,losses,1,L1,2024-10-29T23:12:08Z
+2021,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,91,71,0.562,9.0,1.0,4,6,9,846,663,183,wins,3,W3,2024-05-22T21:22:47Z
+2021,116,Detroit Tigers,202,Unknown Division,103,Unknown League,77,85,0.475,16.0,15.0,3,10,18,697,756,-59,wins,1,W1,2024-05-22T19:55:55Z
+2021,118,Kansas City Royals,202,Unknown Division,103,Unknown League,74,88,0.457,19.0,18.0,4,12,22,686,788,-102,losses,2,L2,2024-05-22T21:22:40Z
+2021,142,Minnesota Twins,202,Unknown Division,103,Unknown League,73,89,0.451,20.0,19.0,5,13,23,729,834,-105,wins,2,W2,2024-07-16T19:42:59Z
+2021,117,Houston Astros,200,Unknown Division,103,Unknown League,95,67,0.586,-,-,1,2,4,863,658,205,wins,2,W2,2024-05-22T19:37:02Z
+2021,136,Seattle Mariners,200,Unknown Division,103,Unknown League,90,72,0.556,5.0,2.0,2,7,10,697,748,-51,losses,1,L1,2024-05-22T21:18:25Z
+2021,114,Cleveland Indians,202,Unknown Division,103,Unknown League,80,82,0.494,13.0,12.0,2,9,16,717,727,-10,wins,1,W1,2024-09-30T15:45:02Z
+2022,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,86,76,0.531,7.0,1.0,2,7,12,725,688,37,losses,1,L1,2024-02-09T23:50:05Z
+2022,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,87,75,0.537,14.0,-,3,6,11,747,685,62,losses,2,L2,2025-01-08T15:38:32Z
+2022,146,Miami Marlins,204,Unknown Division,104,Unknown League,69,93,0.426,32.0,18.0,4,11,22,586,676,-90,wins,1,W1,2024-03-29T01:21:05Z
+2022,120,Washington Nationals,204,Unknown Division,104,Unknown League,55,107,0.34,46.0,32.0,5,15,30,603,855,-252,losses,5,L5,2025-08-12T17:26:46Z
+2022,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,93,69,0.574,-,-,1,4,6,772,637,135,losses,1,L1,2024-05-22T18:24:00Z
+2022,115,Colorado Rockies,203,Unknown Division,104,Unknown League,68,94,0.42,43.0,19.0,5,12,23,698,873,-175,losses,1,L1,2023-11-21T19:48:00Z
+2022,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,74,88,0.457,37.0,13.0,4,9,19,702,740,-38,wins,1,W1,2025-01-08T15:38:25Z
+2022,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,62,100,0.383,31.0,25.0,4,13,27,648,815,-167,losses,1,L1,2024-05-22T17:35:03Z
+2022,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,62,100,0.383,31.0,25.0,5,14,28,591,817,-226,wins,1,W1,2025-07-15T13:35:20Z
+2022,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,111,51,0.685,-,-,1,1,1,847,513,334,wins,1,W1,2024-05-22T18:24:08Z
+2022,135,San Diego Padres,203,Unknown Division,104,Unknown League,89,73,0.549,22.0,+2.0,2,5,10,705,660,45,losses,1,L1,2025-03-03T17:06:50Z
+2022,137,San Francisco Giants,203,Unknown Division,104,Unknown League,81,81,0.5,30.0,6.0,3,8,16,716,697,19,wins,1,W1,2025-07-15T13:35:27Z
+2022,121,New York Mets,204,Unknown Division,104,Unknown League,101,61,0.623,-,+14.0,2,3,4,772,606,166,wins,3,W3,2025-08-12T17:26:40Z
+2022,112,Chicago Cubs,205,Unknown Division,104,Unknown League,74,88,0.457,19.0,13.0,3,10,20,657,731,-74,wins,1,W1,2025-07-15T13:34:00Z
+2022,144,Atlanta Braves,204,Unknown Division,104,Unknown League,101,61,0.623,-,-,1,2,3,789,609,180,losses,1,L1,2023-08-14T17:46:35Z
+2022,142,Minnesota Twins,202,Unknown Division,103,Unknown League,78,84,0.481,14.0,8.0,3,10,18,696,684,12,wins,1,W1,2025-07-15T13:34:41Z
+2022,140,Texas Rangers,200,Unknown Division,103,Unknown League,68,94,0.42,38.0,18.0,4,12,24,707,743,-36,wins,2,W2,2025-07-21T22:12:19Z
+2022,147,New York Yankees,201,Unknown Division,103,Unknown League,99,63,0.611,-,-,1,2,5,807,567,240,losses,2,L2,2025-07-15T13:33:40Z
+2022,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,92,70,0.568,7.0,+6.0,2,4,8,775,679,96,wins,1,W1,2024-05-03T20:20:15Z
+2022,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,86,76,0.531,13.0,-,3,6,13,666,614,52,losses,5,L5,2024-05-22T18:40:20Z
+2022,111,Boston Red Sox,201,Unknown Division,103,Unknown League,78,84,0.481,21.0,8.0,5,9,17,735,787,-52,wins,3,W3,2025-02-25T14:25:06Z
+2022,114,Cleveland Guardians,202,Unknown Division,103,Unknown League,92,70,0.568,-,-,1,3,7,698,634,64,wins,2,W2,2025-07-21T22:12:15Z
+2022,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,83,79,0.512,16.0,3.0,4,7,14,674,688,-14,losses,1,L1,2025-07-15T13:33:47Z
+2022,116,Detroit Tigers,202,Unknown Division,103,Unknown League,66,96,0.407,26.0,20.0,4,13,25,557,713,-156,losses,3,L3,2025-08-15T00:54:20Z
+2022,118,Kansas City Royals,202,Unknown Division,103,Unknown League,65,97,0.401,27.0,21.0,5,14,26,640,810,-170,losses,2,L2,2024-03-29T20:53:20Z
+2022,117,Houston Astros,200,Unknown Division,103,Unknown League,106,56,0.654,-,-,1,1,2,737,518,219,wins,2,W2,2025-06-02T21:08:38Z
+2022,136,Seattle Mariners,200,Unknown Division,103,Unknown League,90,72,0.556,16.0,+4.0,2,5,9,690,623,67,wins,3,W3,2024-05-22T17:21:44Z
+2022,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,73,89,0.451,33.0,13.0,3,11,21,623,668,-45,losses,3,L3,2024-05-22T20:55:15Z
+2022,145,Chicago White Sox,202,Unknown Division,103,Unknown League,81,81,0.5,11.0,5.0,2,8,15,686,717,-31,losses,1,L1,2025-07-15T13:34:06Z
+2022,133,Oakland Athletics,200,Unknown Division,103,Unknown League,60,102,0.37,46.0,26.0,5,15,29,568,770,-202,wins,4,W4,2025-08-15T00:54:15Z
+2023,112,Chicago Cubs,205,Unknown Division,104,Unknown League,83,79,0.512,9.0,1.0,2,7,14,819,723,96,losses,1,L1,2025-08-13T02:39:02Z
+2023,146,Miami Marlins,204,Unknown Division,104,Unknown League,84,78,0.519,20.0,-,3,6,13,666,723,-57,losses,1,L1,2024-12-17T18:27:50Z
+2023,121,New York Mets,204,Unknown Division,104,Unknown League,75,87,0.463,29.0,9.0,4,12,23,717,729,-12,losses,1,L1,2024-12-17T17:51:05Z
+2023,120,Washington Nationals,204,Unknown Division,104,Unknown League,71,91,0.438,33.0,13.0,5,14,26,700,845,-145,wins,1,W1,2024-12-04T16:51:15Z
+2023,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,92,70,0.568,-,-,1,3,5,728,647,81,wins,1,W1,2025-08-13T02:44:53Z
+2023,115,Colorado Rockies,203,Unknown Division,104,Unknown League,59,103,0.364,41.0,25.0,5,15,28,721,957,-236,wins,1,W1,2025-08-13T02:44:45Z
+2023,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,71,91,0.438,21.0,13.0,5,13,25,719,829,-110,wins,2,W2,2025-08-13T02:37:27Z
+2023,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,100,62,0.617,-,-,1,2,3,906,699,207,wins,1,W1,2025-04-16T00:34:07Z
+2023,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,84,78,0.519,16.0,-,2,5,12,746,761,-15,losses,4,L4,2025-08-13T02:37:20Z
+2023,135,San Diego Padres,203,Unknown Division,104,Unknown League,82,80,0.506,18.0,2.0,3,9,17,752,648,104,wins,5,W5,2024-11-26T04:34:41Z
+2023,137,San Francisco Giants,203,Unknown Division,104,Unknown League,79,83,0.488,21.0,5.0,4,10,18,674,719,-45,losses,1,L1,2024-10-30T22:59:36Z
+2023,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,90,72,0.556,14.0,+6.0,2,4,7,796,715,81,wins,1,W1,2024-12-17T18:27:57Z
+2023,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,76,86,0.469,16.0,8.0,4,11,22,692,790,-98,wins,1,W1,2025-07-15T13:36:32Z
+2023,144,Atlanta Braves,204,Unknown Division,104,Unknown League,104,58,0.642,-,-,1,1,1,947,716,231,losses,1,L1,2025-08-13T02:38:55Z
+2023,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,82,80,0.506,10.0,2.0,3,8,15,783,821,-38,losses,2,L2,2025-07-15T13:37:17Z
+2023,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,73,89,0.451,17.0,15.0,4,12,24,739,829,-90,wins,1,W1,2025-07-16T12:08:11Z
+2023,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,101,61,0.623,-,-,1,1,2,807,678,129,losses,1,L1,2024-10-29T21:46:40Z
+2023,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,99,63,0.611,2.0,+11.0,2,2,4,860,665,195,wins,2,W2,2025-01-15T14:32:38Z
+2023,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,89,73,0.549,12.0,+1.0,3,5,9,746,671,75,losses,2,L2,2025-04-16T00:35:45Z
+2023,147,New York Yankees,201,Unknown Division,103,Unknown League,82,80,0.506,19.0,6.0,4,8,16,673,698,-25,losses,1,L1,2024-10-30T21:45:08Z
+2023,133,Oakland Athletics,200,Unknown Division,103,Unknown League,50,112,0.309,40.0,38.0,5,15,30,585,924,-339,losses,1,L1,2025-01-15T14:29:09Z
+2023,142,Minnesota Twins,202,Unknown Division,103,Unknown League,87,75,0.537,-,-,1,7,11,778,659,119,losses,1,L1,2025-08-13T15:17:15Z
+2023,111,Boston Red Sox,201,Unknown Division,103,Unknown League,78,84,0.481,23.0,10.0,5,9,19,772,776,-4,wins,1,W1,2025-03-03T17:05:27Z
+2023,114,Cleveland Guardians,202,Unknown Division,103,Unknown League,76,86,0.469,11.0,12.0,3,11,21,662,697,-35,losses,2,L2,2025-04-16T00:34:00Z
+2023,145,Chicago White Sox,202,Unknown Division,103,Unknown League,61,101,0.377,26.0,27.0,4,13,27,641,841,-200,losses,3,L3,2025-04-16T00:35:51Z
+2023,118,Kansas City Royals,202,Unknown Division,103,Unknown League,56,106,0.346,31.0,32.0,5,14,29,676,859,-183,wins,1,W1,2024-10-03T20:55:05Z
+2023,117,Houston Astros,200,Unknown Division,103,Unknown League,90,72,0.556,-,-,1,3,6,827,698,129,wins,4,W4,2025-01-15T14:29:05Z
+2023,140,Texas Rangers,200,Unknown Division,103,Unknown League,90,72,0.556,-,-,2,4,8,881,716,165,losses,1,L1,2025-08-13T15:17:21Z
+2023,136,Seattle Mariners,200,Unknown Division,103,Unknown League,88,74,0.543,2.0,-,3,6,10,758,659,99,wins,1,W1,2024-11-15T18:04:13Z
+2023,116,Detroit Tigers,202,Unknown Division,103,Unknown League,78,84,0.481,9.0,10.0,2,10,20,661,740,-79,wins,2,W2,2025-07-16T12:08:05Z
+2024,144,Atlanta Braves,204,Unknown Division,104,Unknown League,89,73,0.549,6.0,-,2,6,9,704,607,97,wins,1,W1,2025-07-15T13:37:45Z
+2024,121,New York Mets,204,Unknown Division,104,Unknown League,89,73,0.549,6.0,-,3,7,10,768,697,71,losses,1,L1,2025-04-17T19:10:52Z
+2024,120,Washington Nationals,204,Unknown Division,104,Unknown League,71,91,0.438,24.0,18.0,4,13,25,660,764,-104,losses,1,L1,2025-04-16T00:36:55Z
+2024,146,Miami Marlins,204,Unknown Division,104,Unknown League,62,100,0.383,33.0,27.0,5,14,28,637,841,-204,wins,4,W4,2025-04-16T18:21:33Z
+2024,158,Milwaukee Brewers,205,Unknown Division,104,Unknown League,93,69,0.574,-,-,1,3,4,777,641,136,losses,1,L1,2025-04-14T19:19:18Z
+2024,109,Arizona Diamondbacks,203,Unknown Division,104,Unknown League,89,73,0.549,9.0,-,3,5,8,886,788,98,wins,1,W1,2025-07-15T13:37:52Z
+2024,138,St. Louis Cardinals,205,Unknown Division,104,Unknown League,83,79,0.512,10.0,6.0,3,9,16,672,719,-47,wins,1,W1,2025-04-16T00:37:03Z
+2024,113,Cincinnati Reds,205,Unknown Division,104,Unknown League,77,85,0.475,16.0,12.0,4,11,22,699,694,5,wins,1,W1,2025-02-12T18:19:46Z
+2024,134,Pittsburgh Pirates,205,Unknown Division,104,Unknown League,76,86,0.469,17.0,13.0,5,12,23,665,739,-74,losses,1,L1,2025-04-24T18:00:45Z
+2024,119,Los Angeles Dodgers,203,Unknown Division,104,Unknown League,98,64,0.605,-,-,1,1,1,842,686,156,wins,5,W5,2025-06-25T16:17:49Z
+2024,135,San Diego Padres,203,Unknown Division,104,Unknown League,93,69,0.574,5.0,+4.0,2,4,5,760,669,91,losses,1,L1,2025-01-29T00:47:50Z
+2024,143,Philadelphia Phillies,204,Unknown Division,104,Unknown League,95,67,0.586,-,-,1,2,2,784,671,113,wins,1,W1,2025-04-17T19:10:45Z
+2024,112,Chicago Cubs,205,Unknown Division,104,Unknown League,83,79,0.512,10.0,6.0,2,8,15,736,669,67,losses,1,L1,2025-04-15T05:57:42Z
+2024,108,Los Angeles Angels,200,Unknown Division,103,Unknown League,63,99,0.389,25.5,23.0,5,14,27,635,797,-162,losses,6,L6,2025-04-14T19:19:10Z
+2024,116,Detroit Tigers,202,Unknown Division,103,Unknown League,86,76,0.531,6.5,-,3,5,12,682,642,40,losses,2,L2,2025-04-14T19:17:38Z
+2024,140,Texas Rangers,200,Unknown Division,103,Unknown League,78,84,0.481,10.5,8.0,3,11,21,683,738,-55,wins,3,W3,2025-05-13T20:54:47Z
+2024,136,Seattle Mariners,200,Unknown Division,103,Unknown League,85,77,0.525,3.5,1.0,2,7,14,676,607,69,wins,4,W4,2025-03-18T21:34:40Z
+2024,117,Houston Astros,200,Unknown Division,103,Unknown League,88,73,0.547,-,-,1,4,11,740,649,91,wins,2,W2,2025-03-25T00:00:36Z
+2024,145,Chicago White Sox,202,Unknown Division,103,Unknown League,41,121,0.253,51.5,45.0,5,15,30,507,813,-306,wins,2,W2,2025-05-13T20:54:40Z
+2024,142,Minnesota Twins,202,Unknown Division,103,Unknown League,82,80,0.506,10.5,4.0,4,8,17,742,735,7,losses,4,L4,2024-11-27T00:54:41Z
+2024,118,Kansas City Royals,202,Unknown Division,103,Unknown League,86,76,0.531,6.5,-,2,6,13,735,644,91,wins,1,W1,2025-04-14T19:17:30Z
+2024,114,Cleveland Guardians,202,Unknown Division,103,Unknown League,92,69,0.571,-,-,1,2,6,708,621,87,losses,2,L2,2025-03-11T17:38:51Z
+2024,141,Toronto Blue Jays,201,Unknown Division,103,Unknown League,74,88,0.457,20.0,12.0,5,12,24,671,743,-72,losses,3,L3,2025-06-25T16:17:45Z
+2024,139,Tampa Bay Rays,201,Unknown Division,103,Unknown League,80,82,0.494,14.0,6.0,4,10,20,604,663,-59,losses,1,L1,2025-07-14T21:41:37Z
+2024,111,Boston Red Sox,201,Unknown Division,103,Unknown League,81,81,0.5,13.0,5.0,3,9,18,751,747,4,wins,1,W1,2025-07-14T21:41:30Z
+2024,110,Baltimore Orioles,201,Unknown Division,103,Unknown League,91,71,0.562,3.0,+5.0,2,3,7,786,699,87,wins,3,W3,2025-04-14T19:20:32Z
+2024,147,New York Yankees,201,Unknown Division,103,Unknown League,94,68,0.58,-,-,1,1,3,815,668,147,wins,1,W1,2025-04-16T00:38:10Z
+2024,137,San Francisco Giants,203,Unknown Division,104,Unknown League,80,82,0.494,18.0,9.0,4,10,19,693,699,-6,losses,1,L1,2025-04-24T18:00:53Z
+2024,133,Oakland Athletics,200,Unknown Division,103,Unknown League,69,93,0.426,19.5,17.0,4,13,26,643,764,-121,losses,3,L3,2024-11-12T17:42:51Z
+2024,115,Colorado Rockies,203,Unknown Division,104,Unknown League,61,101,0.377,37.0,28.0,5,15,29,682,929,-247,losses,3,L3,2025-03-25T00:00:30Z
