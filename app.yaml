@@ -1,0 +1,21 @@
+runtime: nodejs22
+
+instance_class: F2
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 10
+  target_cpu_utilization: 0.6
+
+env_variables:
+  NODE_ENV: production
+  LOG_LEVEL: info
+  GOOGLE_CLOUD_PROJECT: hankstank
+  GCP_PROJECT_ID: hankstank
+  GCP_BUCKET_NAME: hanks_tank_data
+  BQ_DATASET: mlb_historical_data
+
+handlers:
+- url: /.*
+  script: auto
+  secure: always

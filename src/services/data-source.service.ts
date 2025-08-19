@@ -10,6 +10,7 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { Storage } from '@google-cloud/storage';
 import { mlbApi } from './mlb-api.service';
+import { fanGraphsService, FanGraphsService } from './fangraphs.service';
 import { cacheService } from './cache.service';
 import { logger } from '../utils/logger';
 import { gcpConfig, validateGCPConfig } from '../config/gcp.config';
@@ -26,8 +27,17 @@ export interface DataRequest {
   season?: number;
   teamId?: number;
   playerId?: number;
-  dataType: 'team-stats' | 'player-stats' | 'schedule' | 'roster' | 'standings' | 'news' | 'reports' | 'analysis';
+  dataType: 'team-stats' | 'player-stats' | 'schedule' | 'roster' | 'standings' | 'news' | 'reports' | 'analysis' | 'team-batting' | 'team-pitching' | 'player-batting' | 'player-pitching' | 'available-stats' | 'player-data' | 'statcast';
   statType?: 'batting' | 'pitching' | 'fielding';
+  // Additional query parameters for legacy endpoints
+  year?: number;
+  stats?: string;
+  orderBy?: string;
+  direction?: string;
+  position?: string;
+  p_throws?: string;
+  stands?: string;
+  events?: string;
 }
 
 export class DataSourceService {
@@ -123,14 +133,27 @@ export class DataSourceService {
    * Determine if we should use historical data sources
    */
   private shouldUseHistoricalData(season: number, dataType: string): boolean {
-    // If GCP is not enabled, always use live data
+    // If GCP is not enabled, always use live data or FanGraphs fallback
     if (!this.gcpEnabled) {
-      logger.info('GCP not available, using live data', { season, dataType });
+      logger.info('GCP not available, using live data or FanGraphs fallback', { season, dataType });
       return false;
     }
 
     const currentSeason = this.config.currentSeason;
     const yearsOld = currentSeason - season;
+    
+    // Data types we have historical data for (2015-2024)
+    const historicalDataTypes = ['team-stats', 'team-batting', 'team-pitching', 'player-stats', 'player-batting', 'player-pitching', 'standings', 'roster'];
+    
+    // Check if this is a data type we have historical data for
+    if (!historicalDataTypes.includes(dataType)) {
+      return false;
+    }
+    
+    // Check if the requested season is within our historical data range (2015-2024)
+    if (season < 2015 || season > 2024) {
+      return false;
+    }
     
     // Always use historical for data older than cutoff
     if (yearsOld > this.config.historicalDataCutoff) {
@@ -142,7 +165,7 @@ export class DataSourceService {
       return ['schedule', 'roster', 'standings'].includes(dataType) ? false : true;
     }
 
-    // For recent seasons (1-2 years old), prefer historical for performance
+    // For recent seasons within our historical range (2015-2024), prefer historical for performance
     return true;
   }
 
@@ -192,15 +215,15 @@ export class DataSourceService {
   }
 
   /**
-   * Fetch from BigQuery
+   * Fetch from BigQuery - Updated for our historical data tables
    */
   private async getFromBigQuery(request: DataRequest): Promise<any> {
     if (!this.bigquery) {
       throw new Error('BigQuery not available - GCP not configured');
     }
 
-    const { season, teamId, dataType, statType } = request;
-    const tableName = this.generateTableName(request);
+    const { season, teamId, dataType, statType, year } = request;
+    const requestYear = year || season || this.config.currentSeason;
     
     let query = '';
     const options = {
@@ -209,31 +232,62 @@ export class DataSourceService {
       jobTimeoutMs: gcpConfig.bigQuery.jobTimeoutMs,
     };
 
-    // Build query based on request type
+    // Build query based on request type using our actual historical data tables
     switch (dataType) {
       case 'team-stats':
-        if (teamId) {
-          query = `
-            SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.${tableName}\`
-            WHERE team_id = ${teamId}
-            ORDER BY date_created DESC
-            LIMIT 100
-          `;
-        } else {
-          query = `
-            SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.${tableName}\`
-            ORDER BY date_created DESC
-            LIMIT 100
-          `;
-        }
+      case 'team-batting':
+        query = `
+          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.team_stats_historical\`
+          WHERE year = ${requestYear} AND stat_type = 'batting'
+          ${teamId ? `AND team_id = ${teamId}` : ''}
+          ORDER BY team_name
+        `;
+        break;
+
+      case 'team-pitching':
+        query = `
+          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.team_stats_historical\`
+          WHERE year = ${requestYear} AND stat_type = 'pitching'
+          ${teamId ? `AND team_id = ${teamId}` : ''}
+          ORDER BY team_name
+        `;
         break;
 
       case 'player-stats':
+      case 'player-batting':
         query = `
-          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.${tableName}\`
-          ${teamId ? `WHERE team_id = ${teamId}` : ''}
-          ORDER BY date_created DESC
+          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.player_stats_historical\`
+          WHERE year = ${requestYear} AND stat_type = 'batting'
+          ${teamId ? `AND team_id = ${teamId}` : ''}
+          ORDER BY player_name
           LIMIT 500
+        `;
+        break;
+
+      case 'player-pitching':
+        query = `
+          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.player_stats_historical\`
+          WHERE year = ${requestYear} AND stat_type = 'pitching'
+          ${teamId ? `AND team_id = ${teamId}` : ''}
+          ORDER BY player_name
+          LIMIT 500
+        `;
+        break;
+
+      case 'standings':
+        query = `
+          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.standings_historical\`
+          WHERE year = ${requestYear}
+          ORDER BY league_name, division_name, division_rank
+        `;
+        break;
+
+      case 'roster':
+        query = `
+          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.rosters_historical\`
+          WHERE year = ${requestYear}
+          ${teamId ? `AND team_id = ${teamId}` : ''}
+          ORDER BY team_name, player_name
         `;
         break;
 
@@ -243,26 +297,62 @@ export class DataSourceService {
 
     options.query = query;
 
-    const [job] = await this.bigquery.createQueryJob(options);
-    const [rows] = await job.getQueryResults();
+    try {
+      const [job] = await this.bigquery.createQueryJob(options);
+      const [rows] = await job.getQueryResults();
 
-    logger.info('BigQuery data fetched', { 
-      tableName, 
-      rowCount: rows.length,
-      jobId: job.id 
-    });
+      logger.info('BigQuery data fetched', { 
+        dataType,
+        year: requestYear,
+        rowCount: rows.length,
+        jobId: job.id 
+      });
 
-    return rows;
+      return rows;
+    } catch (error) {
+      logger.error('BigQuery query failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        query: query.substring(0, 200) + '...',
+        dataType,
+        year: requestYear
+      });
+      throw error;
+    }
   }
 
   /**
-   * Fetch from live MLB API
+   * Fetch from live MLB API or FanGraphs (fallback)
    */
   private async getLiveData(request: DataRequest): Promise<any> {
-    const { season, teamId, dataType } = request;
+    const { season, teamId, dataType, playerId, position, year, stats, orderBy, direction, p_throws, stands, events } = request;
 
+    // Handle FanGraphs-specific endpoints that we don't have historical data for
     switch (dataType) {
+      case 'player-data':
+        if (!playerId) throw new Error('Player ID required for player data');
+        return await fanGraphsService.getPlayerData({ 
+          playerId: playerId.toString(), 
+          position 
+        });
+
+      case 'statcast':
+        return await fanGraphsService.getStatcastData({
+          year: (year || season)?.toString(),
+          position,
+          playerId: playerId?.toString(),
+          p_throws,
+          stands,
+          events
+        });
+
+      case 'available-stats':
+        // Return available stats for the requested data type
+        return await fanGraphsService.getAvailableStats(stats || 'team-batting');
+
+      // MLB API endpoints
       case 'team-stats':
+      case 'team-batting':
+      case 'team-pitching':
         if (teamId) {
           return await mlbApi.getTeamStats(teamId, season);
         }
@@ -278,6 +368,18 @@ export class DataSourceService {
 
       case 'standings':
         return await mlbApi.getStandings(season);
+
+      case 'player-stats':
+      case 'player-batting':
+      case 'player-pitching':
+        // For current season player stats, we might still want to use MLB API
+        // or fall back to FanGraphs for more detailed stats
+        logger.info('Player stats requested - considering FanGraphs fallback', { 
+          dataType, 
+          season, 
+          teamId 
+        });
+        throw new Error('Player stats require specific player ID - use player-data endpoint');
 
       default:
         throw new Error(`Unsupported data type for live API: ${dataType}`);

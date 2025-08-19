@@ -1,5 +1,5 @@
 // MLB StatsAPI Service
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios from 'axios';
 import { config } from '../config/app';
 import { logger } from '../utils/logger';
 import { cacheService } from './cache.service';
@@ -141,7 +141,7 @@ interface MLBGame {
 }
 
 class MLBApiService {
-  private api: AxiosInstance;
+  private api: any;
   private baseUrl: string;
 
   constructor() {
@@ -161,7 +161,7 @@ class MLBApiService {
   private setupInterceptors(): void {
     // Request interceptor
     this.api.interceptors.request.use(
-      (config) => {
+      (config: any) => {
         logger.debug('MLB API Request', {
           url: config.url,
           method: config.method,
@@ -169,7 +169,7 @@ class MLBApiService {
         });
         return config;
       },
-      (error) => {
+      (error: any) => {
         logger.error('MLB API Request Error', { error: error.message });
         return Promise.reject(error);
       }
@@ -177,7 +177,7 @@ class MLBApiService {
 
     // Response interceptor
     this.api.interceptors.response.use(
-      (response: AxiosResponse) => {
+      (response: any) => {
         logger.debug('MLB API Response', {
           url: response.config.url,
           status: response.status,
@@ -185,7 +185,7 @@ class MLBApiService {
         });
         return response;
       },
-      (error) => {
+      (error: any) => {
         logger.error('MLB API Response Error', {
           url: error.config?.url,
           status: error.response?.status,
@@ -199,7 +199,7 @@ class MLBApiService {
 
   private async makeRequest<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
     try {
-      const response = await this.api.get<T>(endpoint, { params });
+      const response = await this.api.get(endpoint, { params });
       return response.data;
     } catch (error) {
       logger.error('MLB API request failed', {

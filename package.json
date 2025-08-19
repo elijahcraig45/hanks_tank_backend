@@ -6,12 +6,17 @@
   "scripts": {
     "start": "node dist/app.js",
     "dev": "npx tsc && node dist/app.js",
-    "build": "npx tsc",
+    "build": "npx tsc --project tsconfig.json",
+    "gcp-build": "npx tsc",
     "build:watch": "npx tsc --watch",
     "serve": "npm run build && npm start",
     "clean": "rm -rf dist",
     "type-check": "npx tsc --noEmit",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "npm run build && gcloud app deploy --quiet",
+    "deploy:prod": "npm run build && gcloud app deploy --promote --quiet",
+    "gcp:logs": "gcloud app logs tail -s default",
+    "gcp:browse": "gcloud app browse"
   },
   "repository": {
     "type": "git",
@@ -27,6 +32,7 @@
   "dependencies": {
     "@google-cloud/bigquery": "^7.9.4",
     "@google-cloud/storage": "^7.17.0",
+    "@types/axios": "^0.9.36",
     "axios": "^1.11.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
