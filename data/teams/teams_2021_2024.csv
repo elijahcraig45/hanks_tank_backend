@@ -1,0 +1,121 @@
+year,team_id,team_name,team_code,location_name,team_name_full,league_id,league_name,division_id,division_name,venue_id,venue_name,first_year_of_play,active
+2021,133,Oakland Athletics,OAK,Oakland,Athletics,103,American League,200,American League West,10,Oakland Coliseum,1901,True
+2021,134,Pittsburgh Pirates,PIT,Pittsburgh,Pirates,104,National League,205,National League Central,31,PNC Park,1882,True
+2021,135,San Diego Padres,SD,San Diego,Padres,104,National League,203,National League West,2680,Petco Park,1968,True
+2021,136,Seattle Mariners,SEA,Seattle,Mariners,103,American League,200,American League West,680,T-Mobile Park,1977,True
+2021,137,San Francisco Giants,SF,San Francisco,Giants,104,National League,203,National League West,2395,Oracle Park,1883,True
+2021,138,St. Louis Cardinals,STL,St. Louis,Cardinals,104,National League,205,National League Central,2889,Busch Stadium,1892,True
+2021,139,Tampa Bay Rays,TB,St. Petersburg,Rays,103,American League,201,American League East,12,Tropicana Field,1996,True
+2021,140,Texas Rangers,TEX,Arlington,Rangers,103,American League,200,American League West,5325,Globe Life Field,1961,True
+2021,141,Toronto Blue Jays,TOR,Toronto,Blue Jays,103,American League,201,American League East,14,Rogers Centre,1977,True
+2021,142,Minnesota Twins,MIN,Minneapolis,Twins,103,American League,202,American League Central,3312,Target Field,1901,True
+2021,143,Philadelphia Phillies,PHI,Philadelphia,Phillies,104,National League,204,National League East,2681,Citizens Bank Park,1883,True
+2021,144,Atlanta Braves,ATL,Atlanta,Braves,104,National League,204,National League East,4705,Truist Park,1871,True
+2021,145,Chicago White Sox,CWS,Chicago,White Sox,103,American League,202,American League Central,4,Guaranteed Rate Field,1901,True
+2021,146,Miami Marlins,MIA,Miami,Marlins,104,National League,204,National League East,4169,loanDepot park,1991,True
+2021,147,New York Yankees,NYY,Bronx,Yankees,103,American League,201,American League East,3313,Yankee Stadium,1903,True
+2021,158,Milwaukee Brewers,MIL,Milwaukee,Brewers,104,National League,205,National League Central,32,American Family Field,1968,True
+2021,108,Los Angeles Angels,LAA,Anaheim,Angels,103,American League,200,American League West,1,Angel Stadium,1961,True
+2021,109,Arizona Diamondbacks,AZ,Phoenix,D-backs,104,National League,203,National League West,15,Chase Field,1996,True
+2021,110,Baltimore Orioles,BAL,Baltimore,Orioles,103,American League,201,American League East,2,Oriole Park at Camden Yards,1901,True
+2021,111,Boston Red Sox,BOS,Boston,Red Sox,103,American League,201,American League East,3,Fenway Park,1901,True
+2021,112,Chicago Cubs,CHC,Chicago,Cubs,104,National League,205,National League Central,17,Wrigley Field,1874,True
+2021,113,Cincinnati Reds,CIN,Cincinnati,Reds,104,National League,205,National League Central,2602,Great American Ball Park,1882,True
+2021,114,Cleveland Indians,CLE,Cleveland,Indians,103,American League,202,American League Central,5,Progressive Field,1901,True
+2021,115,Colorado Rockies,COL,Denver,Rockies,104,National League,203,National League West,19,Coors Field,1992,True
+2021,116,Detroit Tigers,DET,Detroit,Tigers,103,American League,202,American League Central,2394,Comerica Park,1901,True
+2021,117,Houston Astros,HOU,Houston,Astros,103,American League,200,American League West,2392,Minute Maid Park,1962,True
+2021,118,Kansas City Royals,KC,Kansas City,Royals,103,American League,202,American League Central,7,Kauffman Stadium,1968,True
+2021,119,Los Angeles Dodgers,LAD,Los Angeles,Dodgers,104,National League,203,National League West,22,Dodger Stadium,1884,True
+2021,120,Washington Nationals,WSH,Washington,Nationals,104,National League,204,National League East,3309,Nationals Park,1968,True
+2021,121,New York Mets,NYM,Flushing,Mets,104,National League,204,National League East,3289,Citi Field,1962,True
+2022,133,Oakland Athletics,OAK,Oakland,Athletics,103,American League,200,American League West,10,Oakland Coliseum,1901,True
+2022,134,Pittsburgh Pirates,PIT,Pittsburgh,Pirates,104,National League,205,National League Central,31,PNC Park,1882,True
+2022,135,San Diego Padres,SD,San Diego,Padres,104,National League,203,National League West,2680,Petco Park,1968,True
+2022,136,Seattle Mariners,SEA,Seattle,Mariners,103,American League,200,American League West,680,T-Mobile Park,1977,True
+2022,137,San Francisco Giants,SF,San Francisco,Giants,104,National League,203,National League West,2395,Oracle Park,1883,True
+2022,138,St. Louis Cardinals,STL,St. Louis,Cardinals,104,National League,205,National League Central,2889,Busch Stadium,1892,True
+2022,139,Tampa Bay Rays,TB,St. Petersburg,Rays,103,American League,201,American League East,12,Tropicana Field,1996,True
+2022,140,Texas Rangers,TEX,Arlington,Rangers,103,American League,200,American League West,5325,Globe Life Field,1961,True
+2022,141,Toronto Blue Jays,TOR,Toronto,Blue Jays,103,American League,201,American League East,14,Rogers Centre,1977,True
+2022,142,Minnesota Twins,MIN,Minneapolis,Twins,103,American League,202,American League Central,3312,Target Field,1901,True
+2022,143,Philadelphia Phillies,PHI,Philadelphia,Phillies,104,National League,204,National League East,2681,Citizens Bank Park,1883,True
+2022,144,Atlanta Braves,ATL,Atlanta,Braves,104,National League,204,National League East,4705,Truist Park,1871,True
+2022,145,Chicago White Sox,CWS,Chicago,White Sox,103,American League,202,American League Central,4,Guaranteed Rate Field,1901,True
+2022,146,Miami Marlins,MIA,Miami,Marlins,104,National League,204,National League East,4169,loanDepot park,1991,True
+2022,147,New York Yankees,NYY,Bronx,Yankees,103,American League,201,American League East,3313,Yankee Stadium,1903,True
+2022,158,Milwaukee Brewers,MIL,Milwaukee,Brewers,104,National League,205,National League Central,32,American Family Field,1968,True
+2022,108,Los Angeles Angels,LAA,Anaheim,Angels,103,American League,200,American League West,1,Angel Stadium,1961,True
+2022,109,Arizona Diamondbacks,AZ,Phoenix,D-backs,104,National League,203,National League West,15,Chase Field,1996,True
+2022,110,Baltimore Orioles,BAL,Baltimore,Orioles,103,American League,201,American League East,2,Oriole Park at Camden Yards,1901,True
+2022,111,Boston Red Sox,BOS,Boston,Red Sox,103,American League,201,American League East,3,Fenway Park,1901,True
+2022,112,Chicago Cubs,CHC,Chicago,Cubs,104,National League,205,National League Central,17,Wrigley Field,1874,True
+2022,113,Cincinnati Reds,CIN,Cincinnati,Reds,104,National League,205,National League Central,2602,Great American Ball Park,1882,True
+2022,114,Cleveland Guardians,CLE,Cleveland,Guardians,103,American League,202,American League Central,5,Progressive Field,1901,True
+2022,115,Colorado Rockies,COL,Denver,Rockies,104,National League,203,National League West,19,Coors Field,1992,True
+2022,116,Detroit Tigers,DET,Detroit,Tigers,103,American League,202,American League Central,2394,Comerica Park,1901,True
+2022,117,Houston Astros,HOU,Houston,Astros,103,American League,200,American League West,2392,Minute Maid Park,1962,True
+2022,118,Kansas City Royals,KC,Kansas City,Royals,103,American League,202,American League Central,7,Kauffman Stadium,1968,True
+2022,119,Los Angeles Dodgers,LAD,Los Angeles,Dodgers,104,National League,203,National League West,22,Dodger Stadium,1884,True
+2022,120,Washington Nationals,WSH,Washington,Nationals,104,National League,204,National League East,3309,Nationals Park,1968,True
+2022,121,New York Mets,NYM,Flushing,Mets,104,National League,204,National League East,3289,Citi Field,1962,True
+2023,133,Oakland Athletics,OAK,Oakland,Athletics,103,American League,200,American League West,10,Oakland Coliseum,1901,True
+2023,134,Pittsburgh Pirates,PIT,Pittsburgh,Pirates,104,National League,205,National League Central,31,PNC Park,1882,True
+2023,135,San Diego Padres,SD,San Diego,Padres,104,National League,203,National League West,2680,Petco Park,1968,True
+2023,136,Seattle Mariners,SEA,Seattle,Mariners,103,American League,200,American League West,680,T-Mobile Park,1977,True
+2023,137,San Francisco Giants,SF,San Francisco,Giants,104,National League,203,National League West,2395,Oracle Park,1883,True
+2023,138,St. Louis Cardinals,STL,St. Louis,Cardinals,104,National League,205,National League Central,2889,Busch Stadium,1892,True
+2023,139,Tampa Bay Rays,TB,St. Petersburg,Rays,103,American League,201,American League East,12,Tropicana Field,1996,True
+2023,140,Texas Rangers,TEX,Arlington,Rangers,103,American League,200,American League West,5325,Globe Life Field,1961,True
+2023,141,Toronto Blue Jays,TOR,Toronto,Blue Jays,103,American League,201,American League East,14,Rogers Centre,1977,True
+2023,142,Minnesota Twins,MIN,Minneapolis,Twins,103,American League,202,American League Central,3312,Target Field,1901,True
+2023,143,Philadelphia Phillies,PHI,Philadelphia,Phillies,104,National League,204,National League East,2681,Citizens Bank Park,1883,True
+2023,144,Atlanta Braves,ATL,Atlanta,Braves,104,National League,204,National League East,4705,Truist Park,1871,True
+2023,145,Chicago White Sox,CWS,Chicago,White Sox,103,American League,202,American League Central,4,Guaranteed Rate Field,1901,True
+2023,146,Miami Marlins,MIA,Miami,Marlins,104,National League,204,National League East,4169,loanDepot park,1991,True
+2023,147,New York Yankees,NYY,Bronx,Yankees,103,American League,201,American League East,3313,Yankee Stadium,1903,True
+2023,158,Milwaukee Brewers,MIL,Milwaukee,Brewers,104,National League,205,National League Central,32,American Family Field,1968,True
+2023,108,Los Angeles Angels,LAA,Anaheim,Angels,103,American League,200,American League West,1,Angel Stadium,1961,True
+2023,109,Arizona Diamondbacks,AZ,Phoenix,D-backs,104,National League,203,National League West,15,Chase Field,1996,True
+2023,110,Baltimore Orioles,BAL,Baltimore,Orioles,103,American League,201,American League East,2,Oriole Park at Camden Yards,1901,True
+2023,111,Boston Red Sox,BOS,Boston,Red Sox,103,American League,201,American League East,3,Fenway Park,1901,True
+2023,112,Chicago Cubs,CHC,Chicago,Cubs,104,National League,205,National League Central,17,Wrigley Field,1874,True
+2023,113,Cincinnati Reds,CIN,Cincinnati,Reds,104,National League,205,National League Central,2602,Great American Ball Park,1882,True
+2023,114,Cleveland Guardians,CLE,Cleveland,Guardians,103,American League,202,American League Central,5,Progressive Field,1901,True
+2023,115,Colorado Rockies,COL,Denver,Rockies,104,National League,203,National League West,19,Coors Field,1992,True
+2023,116,Detroit Tigers,DET,Detroit,Tigers,103,American League,202,American League Central,2394,Comerica Park,1901,True
+2023,117,Houston Astros,HOU,Houston,Astros,103,American League,200,American League West,2392,Minute Maid Park,1962,True
+2023,118,Kansas City Royals,KC,Kansas City,Royals,103,American League,202,American League Central,7,Kauffman Stadium,1968,True
+2023,119,Los Angeles Dodgers,LAD,Los Angeles,Dodgers,104,National League,203,National League West,22,Dodger Stadium,1884,True
+2023,120,Washington Nationals,WSH,Washington,Nationals,104,National League,204,National League East,3309,Nationals Park,1968,True
+2023,121,New York Mets,NYM,Flushing,Mets,104,National League,204,National League East,3289,Citi Field,1962,True
+2024,133,Oakland Athletics,OAK,Oakland,Athletics,103,American League,200,American League West,10,Oakland Coliseum,1901,True
+2024,134,Pittsburgh Pirates,PIT,Pittsburgh,Pirates,104,National League,205,National League Central,31,PNC Park,1882,True
+2024,135,San Diego Padres,SD,San Diego,Padres,104,National League,203,National League West,2680,Petco Park,1968,True
+2024,136,Seattle Mariners,SEA,Seattle,Mariners,103,American League,200,American League West,680,T-Mobile Park,1977,True
+2024,137,San Francisco Giants,SF,San Francisco,Giants,104,National League,203,National League West,2395,Oracle Park,1883,True
+2024,138,St. Louis Cardinals,STL,St. Louis,Cardinals,104,National League,205,National League Central,2889,Busch Stadium,1892,True
+2024,139,Tampa Bay Rays,TB,St. Petersburg,Rays,103,American League,201,American League East,12,Tropicana Field,1996,True
+2024,140,Texas Rangers,TEX,Arlington,Rangers,103,American League,200,American League West,5325,Globe Life Field,1961,True
+2024,141,Toronto Blue Jays,TOR,Toronto,Blue Jays,103,American League,201,American League East,14,Rogers Centre,1977,True
+2024,142,Minnesota Twins,MIN,Minneapolis,Twins,103,American League,202,American League Central,3312,Target Field,1901,True
+2024,143,Philadelphia Phillies,PHI,Philadelphia,Phillies,104,National League,204,National League East,2681,Citizens Bank Park,1883,True
+2024,144,Atlanta Braves,ATL,Atlanta,Braves,104,National League,204,National League East,4705,Truist Park,1871,True
+2024,145,Chicago White Sox,CWS,Chicago,White Sox,103,American League,202,American League Central,4,Guaranteed Rate Field,1901,True
+2024,146,Miami Marlins,MIA,Miami,Marlins,104,National League,204,National League East,4169,loanDepot park,1991,True
+2024,147,New York Yankees,NYY,Bronx,Yankees,103,American League,201,American League East,3313,Yankee Stadium,1903,True
+2024,158,Milwaukee Brewers,MIL,Milwaukee,Brewers,104,National League,205,National League Central,32,American Family Field,1968,True
+2024,108,Los Angeles Angels,LAA,Anaheim,Angels,103,American League,200,American League West,1,Angel Stadium,1961,True
+2024,109,Arizona Diamondbacks,AZ,Phoenix,D-backs,104,National League,203,National League West,15,Chase Field,1996,True
+2024,110,Baltimore Orioles,BAL,Baltimore,Orioles,103,American League,201,American League East,2,Oriole Park at Camden Yards,1901,True
+2024,111,Boston Red Sox,BOS,Boston,Red Sox,103,American League,201,American League East,3,Fenway Park,1901,True
+2024,112,Chicago Cubs,CHC,Chicago,Cubs,104,National League,205,National League Central,17,Wrigley Field,1874,True
+2024,113,Cincinnati Reds,CIN,Cincinnati,Reds,104,National League,205,National League Central,2602,Great American Ball Park,1882,True
+2024,114,Cleveland Guardians,CLE,Cleveland,Guardians,103,American League,202,American League Central,5,Progressive Field,1901,True
+2024,115,Colorado Rockies,COL,Denver,Rockies,104,National League,203,National League West,19,Coors Field,1992,True
+2024,116,Detroit Tigers,DET,Detroit,Tigers,103,American League,202,American League Central,2394,Comerica Park,1901,True
+2024,117,Houston Astros,HOU,Houston,Astros,103,American League,200,American League West,2392,Minute Maid Park,1962,True
+2024,118,Kansas City Royals,KC,Kansas City,Royals,103,American League,202,American League Central,7,Kauffman Stadium,1968,True
+2024,119,Los Angeles Dodgers,LAD,Los Angeles,Dodgers,104,National League,203,National League West,22,Dodger Stadium,1884,True
+2024,120,Washington Nationals,WSH,Washington,Nationals,104,National League,204,National League East,3309,Nationals Park,1968,True
+2024,121,New York Mets,NYM,Flushing,Mets,104,National League,204,National League East,3289,Citi Field,1962,True

@@ -5,18 +5,18 @@ config();
 
 export const gcpConfig = {
   // Google Cloud Project Configuration
-  projectId: process.env.GCP_PROJECT_ID || 'mlb-414201',
+  projectId: process.env.GCP_PROJECT_ID || 'hankstank',
   
   // BigQuery Configuration
   bigQuery: {
-    dataset: process.env.BQ_DATASET || 'MLB_data',
-    location: process.env.BQ_LOCATION || 'us-east1',
+    dataset: process.env.BQ_DATASET || 'mlb_historical_data',
+    location: process.env.BQ_LOCATION || 'US',
     jobTimeoutMs: parseInt(process.env.BQ_JOB_TIMEOUT || '30000'),
   },
   
   // Cloud Storage Configuration
   storage: {
-    bucketName: process.env.GCS_BUCKET_NAME || 'mlb_henry',
+    bucketName: process.env.GCS_BUCKET_NAME || 'hanks_tank_data',
     baseFolder: process.env.GCS_BASE_FOLDER || '',
   },
   
