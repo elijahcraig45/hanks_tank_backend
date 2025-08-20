@@ -92,26 +92,29 @@ export class DataSourceService {
    * Main method to get data from appropriate source
    */
   async getData(request: DataRequest): Promise<any> {
-    const season = request.season || this.config.currentSeason;
-    const cacheKey = this.generateCacheKey(request);
+    const season = request.season || request.year || this.config.currentSeason;
+    
+    // Update request with computed season for consistent cache key generation
+    const requestWithSeason = { ...request, season };
+    const cacheKey = this.generateCacheKey(requestWithSeason);
     
     try {
       // Try cache first
       const cachedData = await cacheService.get(cacheKey);
       if (cachedData) {
-        logger.info('Data served from cache', { cacheKey, dataType: request.dataType });
+        logger.info('Data served from cache', { cacheKey, dataType: requestWithSeason.dataType });
         return cachedData;
       }
 
       let data: any;
       
       // Determine data source based on season and data type
-      if (this.shouldUseHistoricalData(season, request.dataType)) {
-        logger.info('Fetching from historical data source', { season, dataType: request.dataType });
-        data = await this.getHistoricalData(request);
+      if (this.shouldUseHistoricalData(season, requestWithSeason.dataType)) {
+        logger.info('Fetching from historical data source', { season, dataType: requestWithSeason.dataType });
+        data = await this.getHistoricalData(requestWithSeason);
       } else {
-        logger.info('Fetching from live MLB API', { season, dataType: request.dataType });
-        data = await this.getLiveData(request);
+        logger.info('Fetching from live MLB API', { season, dataType: requestWithSeason.dataType });
+        data = await this.getLiveData(requestWithSeason);
       }
 
       // Cache the result with appropriate TTL
@@ -143,29 +146,31 @@ export class DataSourceService {
     const yearsOld = currentSeason - season;
     
     // Data types we have historical data for (2015-2024)
-    const historicalDataTypes = ['team-stats', 'team-batting', 'team-pitching', 'player-stats', 'player-batting', 'player-pitching', 'standings', 'roster'];
+    const historicalDataTypes = ['team-stats', 'team-batting', 'team-pitching', 'standings'];
+    
+    // Player data types that should use MLB API (no historical player data yet)
+    const playerDataTypes = ['player-stats', 'player-batting', 'player-pitching', 'roster'];
     
     // Check if this is a data type we have historical data for
     if (!historicalDataTypes.includes(dataType)) {
+      logger.info('Data type not available in historical data, using MLB API', { dataType, season });
       return false;
     }
     
     // Check if the requested season is within our historical data range (2015-2024)
     if (season < 2015 || season > 2024) {
+      logger.info('Season outside historical data range (2015-2024), using MLB API', { season, dataType });
       return false;
     }
     
-    // Always use historical for data older than cutoff
-    if (yearsOld > this.config.historicalDataCutoff) {
-      return true;
-    }
-
-    // For current season, use live data for dynamic content
+    // For current season (2025), always use MLB API for live data
     if (season === currentSeason) {
-      return ['schedule', 'roster', 'standings'].includes(dataType) ? false : true;
+      logger.info('Current season requested, using MLB API for live data', { season, dataType });
+      return false;
     }
 
-    // For recent seasons within our historical range (2015-2024), prefer historical for performance
+    // For seasons 2015-2024, use historical data for team stats
+    logger.info('Using historical data for team stats', { season, dataType });
     return true;
   }
 
@@ -237,7 +242,13 @@ export class DataSourceService {
       case 'team-stats':
       case 'team-batting':
         query = `
-          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.team_stats_historical\`
+          SELECT 
+            team_id, team_name, year, games_played,
+            at_bats, runs, hits, doubles, triples, home_runs, rbi,
+            stolen_bases, caught_stealing, walks, strikeouts, 
+            batting_avg, obp, slg, ops, total_bases, hit_by_pitch,
+            sac_flies, sac_bunts, left_on_base
+          FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.team_stats_historical\`
           WHERE year = ${requestYear} AND stat_type = 'batting'
           ${teamId ? `AND team_id = ${teamId}` : ''}
           ORDER BY team_name
@@ -246,7 +257,14 @@ export class DataSourceService {
 
       case 'team-pitching':
         query = `
-          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.team_stats_historical\`
+          SELECT 
+            team_id, team_name, year, games_played,
+            wins, losses, win_percentage, era, games_started, games_finished,
+            complete_games, shutouts, saves, save_opportunities, holds, blown_saves,
+            innings_pitched, hits_allowed, runs_allowed, earned_runs, 
+            home_runs_allowed, walks_allowed, whip, batters_faced,
+            wild_pitches, hit_batsmen, balks
+          FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.team_stats_historical\`
           WHERE year = ${requestYear} AND stat_type = 'pitching'
           ${teamId ? `AND team_id = ${teamId}` : ''}
           ORDER BY team_name
@@ -255,41 +273,24 @@ export class DataSourceService {
 
       case 'player-stats':
       case 'player-batting':
-        query = `
-          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.player_stats_historical\`
-          WHERE year = ${requestYear} AND stat_type = 'batting'
-          ${teamId ? `AND team_id = ${teamId}` : ''}
-          ORDER BY player_name
-          LIMIT 500
-        `;
-        break;
+        // For player stats, fallback to MLB API since we don't have player historical data yet
+        throw new Error('Player stats not available in historical data - using MLB API fallback');
 
       case 'player-pitching':
-        query = `
-          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.player_stats_historical\`
-          WHERE year = ${requestYear} AND stat_type = 'pitching'
-          ${teamId ? `AND team_id = ${teamId}` : ''}
-          ORDER BY player_name
-          LIMIT 500
-        `;
-        break;
+        // For player stats, fallback to MLB API since we don't have player historical data yet
+        throw new Error('Player pitching not available in historical data - using MLB API fallback');
 
       case 'standings':
         query = `
           SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.standings_historical\`
           WHERE year = ${requestYear}
-          ORDER BY league_name, division_name, division_rank
+          ORDER BY league_id, division_id, games_back
         `;
         break;
 
       case 'roster':
-        query = `
-          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.rosters_historical\`
-          WHERE year = ${requestYear}
-          ${teamId ? `AND team_id = ${teamId}` : ''}
-          ORDER BY team_name, player_name
-        `;
-        break;
+        // For rosters, fallback to MLB API for most current data
+        throw new Error('Roster data not available in historical data - using MLB API fallback');
 
       default:
         throw new Error(`Unsupported data type for BigQuery: ${dataType}`);
@@ -308,7 +309,9 @@ export class DataSourceService {
         jobId: job.id 
       });
 
-      return rows;
+      // Transform the data to match frontend expectations
+      const transformedData = this.transformBigQueryData(rows, dataType);
+      return transformedData;
     } catch (error) {
       logger.error('BigQuery query failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -318,6 +321,139 @@ export class DataSourceService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Transform BigQuery data to match frontend expectations
+   */
+  private transformBigQueryData(rows: any[], dataType: string): any[] {
+    return rows.map(row => {
+      if (dataType === 'team-batting' || dataType === 'team-stats') {
+        return {
+          Team: row.team_name || row.Team,
+          G: row.games_played || row.G,
+          AB: row.at_bats || row.AB,
+          R: row.runs || row.R,
+          H: row.hits || row.H,
+          '2B': row.doubles || row['2B'],
+          '3B': row.triples || row['3B'],
+          HR: row.home_runs || row.HR,
+          RBI: row.rbi || row.RBI,
+          SB: row.stolen_bases || row.SB,
+          CS: row.caught_stealing || row.CS,
+          BB: row.walks || row.BB,
+          SO: row.strikeouts || row.SO,
+          AVG: row.batting_avg || row.AVG,
+          OBP: row.obp || row.OBP,
+          SLG: row.slg || row.SLG,
+          OPS: row.ops || row.OPS,
+          TB: row.total_bases || row.TB,
+          HBP: row.hit_by_pitch || row.HBP,
+          SF: row.sac_flies || row.SF,
+          SH: row.sac_bunts || row.SH,
+          LOB: row.left_on_base || row.LOB,
+          team_id: row.team_id,
+          year: row.year
+        };
+      } else if (dataType === 'team-pitching') {
+        return {
+          Team: row.team_name || row.Team,
+          W: row.wins || row.W,
+          L: row.losses || row.L,
+          'W-L%': row.win_percentage || row['W-L%'],
+          ERA: row.era || row.ERA,
+          GS: row.games_started || row.GS,
+          GF: row.games_finished || row.GF,
+          CG: row.complete_games || row.CG,
+          SHO: row.shutouts || row.SHO,
+          SV: row.saves || row.SV,
+          SVO: row.save_opportunities || row.SVO,
+          HLD: row.holds || row.HLD,
+          BS: row.blown_saves || row.BS,
+          IP: row.innings_pitched || row.IP,
+          H: row.hits_allowed || row.H,
+          R: row.runs_allowed || row.R,
+          ER: row.earned_runs || row.ER,
+          HR: row.home_runs_allowed || row.HR,
+          BB: row.walks_allowed || row.BB,
+          WHIP: row.whip || row.WHIP,
+          BF: row.batters_faced || row.BF,
+          WP: row.wild_pitches || row.WP,
+          HBP: row.hit_batsmen || row.HBP,
+          BK: row.balks || row.BK,
+          team_id: row.team_id,
+          year: row.year
+        };
+      } else {
+        // For other data types, return as-is
+        return row;
+      }
+    });
+  }
+
+  /**
+   * Transform MLB API team stats to match frontend expectations
+   */
+  private transformMLBTeamStats(splitObj: any, dataType: string): any {
+    if (!splitObj || !splitObj.stat) {
+      return {};
+    }
+
+    const stats = splitObj.stat;
+    
+    if (dataType === 'team-batting') {
+      return {
+        G: stats.gamesPlayed || 0,
+        AB: stats.atBats || 0,
+        R: stats.runs || 0,
+        H: stats.hits || 0,
+        '2B': stats.doubles || 0,
+        '3B': stats.triples || 0,
+        HR: stats.homeRuns || 0,
+        RBI: stats.rbi || 0,
+        SB: stats.stolenBases || 0,
+        CS: stats.caughtStealing || 0,
+        BB: stats.baseOnBalls || 0,
+        SO: stats.strikeOuts || 0,
+        AVG: stats.avg || '0.000',
+        OBP: stats.obp || '0.000',
+        SLG: stats.slg || '0.000',
+        OPS: stats.ops || '0.000',
+        TB: stats.totalBases || 0,
+        HBP: stats.hitByPitch || 0,
+        SF: stats.sacFlies || 0,
+        SH: stats.sacBunts || 0,
+        LOB: stats.leftOnBase || 0
+      };
+    } else if (dataType === 'team-pitching') {
+      return {
+        W: stats.wins || 0,
+        L: stats.losses || 0,
+        'W-L%': stats.winPercentage || '0.000',
+        ERA: stats.era || '0.00',
+        GS: stats.gamesStarted || 0,
+        GF: stats.gamesFinished || 0,
+        CG: stats.completeGames || 0,
+        SHO: stats.shutouts || 0,
+        SV: stats.saves || 0,
+        SVO: stats.saveOpportunities || 0,
+        HLD: stats.holds || 0,
+        BS: stats.blownSaves || 0,
+        IP: stats.inningsPitched || '0.0',
+        H: stats.hits || 0,
+        R: stats.runs || 0,
+        ER: stats.earnedRuns || 0,
+        HR: stats.homeRuns || 0,
+        BB: stats.baseOnBalls || 0,
+        WHIP: stats.whip || '0.00',
+        BF: stats.battersFaced || 0,
+        WP: stats.wildPitches || 0,
+        HBP: stats.hitBatsmen || 0,
+        BK: stats.balks || 0
+      };
+    }
+    
+    return {};
   }
 
   /**
@@ -354,9 +490,50 @@ export class DataSourceService {
       case 'team-batting':
       case 'team-pitching':
         if (teamId) {
-          return await mlbApi.getTeamStats(teamId, season);
+          // Get stats for a specific team
+          const statType = dataType === 'team-pitching' ? 'pitching' : 'hitting';
+          if (statType === 'pitching') {
+            return await mlbApi.getTeamPitchingStats(teamId, season);
+          } else {
+            return await mlbApi.getTeamBattingStats(teamId, season);
+          }
+        } else {
+          // Get stats for all teams
+          const allTeams = await mlbApi.getAllTeams(season);
+          const teamStats = [];
+          
+          // Fetch stats for each team
+          for (const team of allTeams.teams) {
+            try {
+              const statType = dataType === 'team-pitching' ? 'pitching' : 'hitting';
+              let stats;
+              if (statType === 'pitching') {
+                stats = await mlbApi.getTeamPitchingStats(team.id, season);
+              } else {
+                stats = await mlbApi.getTeamBattingStats(team.id, season);
+              }
+              
+              if (stats && stats.stats && stats.stats.length > 0 && stats.stats[0].splits && stats.stats[0].splits.length > 0) {
+                // Transform the stats to match our expected format
+                const teamStatData = {
+                  Team: team.name,
+                  team_id: team.id,
+                  year: season,
+                  ...this.transformMLBTeamStats(stats.stats[0].splits[0], dataType)
+                };
+                teamStats.push(teamStatData);
+              }
+            } catch (error) {
+              logger.warn(`Failed to get stats for team ${team.name}`, { 
+                teamId: team.id, 
+                error: error instanceof Error ? error.message : 'Unknown error' 
+              });
+              // Continue with other teams even if one fails
+            }
+          }
+          
+          return teamStats;
         }
-        return await mlbApi.getAllTeams(season);
 
       case 'roster':
         if (!teamId) throw new Error('Team ID required for roster data');
