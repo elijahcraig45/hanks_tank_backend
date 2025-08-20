@@ -35,4 +35,21 @@ router.get('/statcast', legacyController.getStatcast.bind(legacyController));
 // Team Data (aggregated)
 router.get('/teamData', legacyController.getTeamData.bind(legacyController));
 
+// News Endpoints
+router.get('/mlb-news', legacyController.getMLBNews.bind(legacyController));
+router.get('/braves-news', legacyController.getBravesNews.bind(legacyController));
+router.post('/news/refresh', legacyController.refreshNews.bind(legacyController));
+
+// Health check with scheduler status
+router.get('/health/scheduler', (req, res) => {
+  const { schedulerService } = require('../services/scheduler.service');
+  res.json({
+    status: 'ok',
+    scheduler: {
+      jobs: schedulerService.getJobStatus(),
+      timestamp: new Date().toISOString()
+    }
+  });
+});
+
 export default router;
