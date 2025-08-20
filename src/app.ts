@@ -6,6 +6,7 @@ import { logger, logStartup } from './utils/logger';
 import hybridTeamsRoutes from './routes/hybrid-teams.routes';
 import legacyRoutes from './routes/legacy.routes';
 import { validateGCPConfig } from './config/gcp.config';
+import { schedulerService } from './services/scheduler.service';
 
 const app = express();
 
@@ -90,6 +91,11 @@ const server = app.listen(PORT, () => {
     environment: config.nodeEnv,
     port: PORT
   });
+  
+  // Initialize scheduler for news fetching
+  logger.info('Initializing scheduled tasks...');
+  // Note: schedulerService is already initialized when imported
+  logger.info('Scheduler service initialized successfully');
 });
 
 // Graceful shutdown handling
@@ -109,6 +115,16 @@ const gracefulShutdown = async (signal: string) => {
     if (err) {
       logger.error('Error closing server', { error: err.message });
       process.exit(1);
+    }
+    
+    // Stop scheduler jobs
+    try {
+      schedulerService.stopAllJobs();
+      logger.info('Scheduler jobs stopped');
+    } catch (error) {
+      logger.error('Error stopping scheduler jobs', { 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
     
     logger.info('Server closed successfully');

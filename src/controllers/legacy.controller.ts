@@ -5,6 +5,7 @@
 
 import { Request, Response } from 'express';
 import { dataSourceService } from '../services/data-source.service';
+import { newsService } from '../services/news.service';
 import { logger } from '../utils/logger';
 
 export class LegacyController {
@@ -266,6 +267,76 @@ export class LegacyController {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       res.status(500).json({ error: 'Failed to fetch team data' });
+    }
+  }
+
+  /**
+   * GET /api/mlb-news
+   * Legacy endpoint for MLB general news
+   */
+  async getMLBNews(req: Request, res: Response): Promise<void> {
+    try {
+      logger.info('MLB news request');
+
+      const newsData = await newsService.getNews('mlb');
+      
+      if (!newsData) {
+        res.status(404).json({ error: 'No MLB news data available' });
+        return;
+      }
+
+      res.json(newsData);
+    } catch (error) {
+      logger.error('Error fetching MLB news', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      res.status(500).json({ error: 'Failed to fetch MLB news' });
+    }
+  }
+
+  /**
+   * GET /api/braves-news
+   * Legacy endpoint for Atlanta Braves news
+   */
+  async getBravesNews(req: Request, res: Response): Promise<void> {
+    try {
+      logger.info('Braves news request');
+
+      const newsData = await newsService.getNews('braves');
+      
+      if (!newsData) {
+        res.status(404).json({ error: 'No Braves news data available' });
+        return;
+      }
+
+      res.json(newsData);
+    } catch (error) {
+      logger.error('Error fetching Braves news', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      res.status(500).json({ error: 'Failed to fetch Braves news' });
+    }
+  }
+
+  /**
+   * POST /api/news/refresh
+   * Manual trigger for news refresh (for testing/admin use)
+   */
+  async refreshNews(req: Request, res: Response): Promise<void> {
+    try {
+      logger.info('Manual news refresh triggered');
+
+      await newsService.scheduledNewsFetch();
+      
+      res.json({ 
+        message: 'News refresh completed',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Error in manual news refresh', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      res.status(500).json({ error: 'Failed to refresh news' });
     }
   }
 }
