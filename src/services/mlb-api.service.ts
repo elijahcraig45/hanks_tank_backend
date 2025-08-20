@@ -239,7 +239,7 @@ class MLBApiService {
     const cacheKey = CacheKeys.teams.all(season);
     return this.getCachedOrFetch(
       cacheKey,
-      () => this.makeRequest<{ teams: MLBTeam[] }>('/teams', { season }),
+      () => this.makeRequest<{ teams: MLBTeam[] }>('/teams', { season, sportId: 1 }),
       config.cache.ttl.teams
     );
   }
@@ -266,7 +266,43 @@ class MLBApiService {
     const cacheKey = CacheKeys.teams.stats(teamId, season, group);
     return this.getCachedOrFetch(
       cacheKey,
-      () => this.makeRequest(`/teams/${teamId}/stats`, { season, group }),
+      () => this.makeRequest(`/stats`, { 
+        stats: 'season',
+        group: group || 'hitting',
+        season: season || new Date().getFullYear(),
+        gameType: 'R',
+        teamId: teamId
+      }),
+      config.cache.ttl.stats
+    );
+  }
+
+  async getTeamBattingStats(teamId: number, season?: number): Promise<any> {
+    const cacheKey = CacheKeys.teams.stats(teamId, season, 'hitting');
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest(`/stats`, { 
+        stats: 'season',
+        group: 'hitting',
+        season: season || new Date().getFullYear(),
+        gameType: 'R',
+        teamId: teamId
+      }),
+      config.cache.ttl.stats
+    );
+  }
+
+  async getTeamPitchingStats(teamId: number, season?: number): Promise<any> {
+    const cacheKey = CacheKeys.teams.stats(teamId, season, 'pitching');
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest(`/stats`, { 
+        stats: 'season',
+        group: 'pitching',
+        season: season || new Date().getFullYear(),
+        gameType: 'R',
+        teamId: teamId
+      }),
       config.cache.ttl.stats
     );
   }
