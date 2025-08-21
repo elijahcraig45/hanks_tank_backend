@@ -544,7 +544,26 @@ export class DataSourceService {
         return await mlbApi.getSchedule(teamId.toString(), season?.toString());
 
       case 'standings':
-        return await mlbApi.getStandings(season);
+        // MLB API requires leagueId parameter - need both AL (103) and NL (104) for complete standings
+        const [alStandings, nlStandings] = await Promise.all([
+          mlbApi.getStandings(103, season), // American League
+          mlbApi.getStandings(104, season)  // National League
+        ]);
+        
+        // Combine standings from both leagues
+        const combinedStandings: any = {
+          records: []
+        };
+        
+        if (alStandings && alStandings.records) {
+          combinedStandings.records.push(...alStandings.records);
+        }
+        
+        if (nlStandings && nlStandings.records) {
+          combinedStandings.records.push(...nlStandings.records);
+        }
+        
+        return combinedStandings;
 
       case 'player-stats':
       case 'player-batting':
