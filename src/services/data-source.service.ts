@@ -810,7 +810,7 @@ export class DataSourceService {
     logger.info('Fetching fresh player batting data from MLB API', { season });
     const battingLeaderboard = await mlbApi.getPlayerBattingLeaderboard(
       season, 
-      500, // Large limit to get comprehensive data
+      1000, // Large limit to get comprehensive data including non-qualified players
       'ops', // Default sort for API call (we'll sort locally)
       'desc'
     );
@@ -851,7 +851,7 @@ export class DataSourceService {
     logger.info('Fetching fresh player pitching data from MLB API', { season });
     const pitchingLeaderboard = await mlbApi.getPlayerPitchingLeaderboard(
       season,
-      500, // Large limit to get comprehensive data
+      1000, // Large limit to get comprehensive data including non-qualified players
       'era', // Default sort for API call (we'll sort locally)
       'asc'
     );
