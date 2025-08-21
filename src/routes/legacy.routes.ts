@@ -12,6 +12,10 @@ const router = Router();
 router.get('/teamBatting', legacyController.getTeamBatting.bind(legacyController));
 router.get('/TeamPitching', legacyController.getTeamPitching.bind(legacyController));
 
+// New Team Leaderboard Endpoints (Phase 1)
+router.get('/team-batting', legacyController.getTeamBatting.bind(legacyController));
+router.get('/team-pitching', legacyController.getTeamPitching.bind(legacyController));
+
 // Team Statistics Available Stats
 router.get('/teamBatting/avaliableStats', legacyController.getAvailableStats.bind(legacyController));
 router.get('/TeamBatting/avaliableStats', legacyController.getAvailableStats.bind(legacyController));
