@@ -28,6 +28,8 @@ export const CacheKeys = {
     byId: (playerId: number, season?: number) => `player:${playerId}:${season || 'current'}`,
     stats: (playerId: number, season?: number, group?: string) => `player:${playerId}:stats:${season || 'current'}:${group || 'all'}`,
     search: (query: string, params?: any) => `players:search:${query}:${JSON.stringify(params || {})}`,
+    leaderboard: (season?: number, group?: string, sortStat?: string, limit?: number) => 
+      `players:leaderboard:${season || 'current'}:${group || 'hitting'}:${sortStat || 'ops'}:${limit || 100}`,
   },
   
   // Games

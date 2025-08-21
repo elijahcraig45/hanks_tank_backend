@@ -322,6 +322,43 @@ class MLBApiService {
     );
   }
 
+  // Player leaderboards endpoints
+  async getPlayerBattingLeaderboard(season?: number, limit: number = 100, sortStat: string = 'ops', order: string = 'desc'): Promise<any> {
+    const cacheKey = CacheKeys.players.leaderboard(season, 'hitting', sortStat, limit);
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest(`/stats`, {
+        stats: 'season',
+        group: 'hitting',
+        season: season || new Date().getFullYear(),
+        sportId: 1,
+        gameType: 'R',
+        limit,
+        sortStat,
+        order
+      }),
+      config.cache.ttl.stats
+    );
+  }
+
+  async getPlayerPitchingLeaderboard(season?: number, limit: number = 100, sortStat: string = 'era', order: string = 'asc'): Promise<any> {
+    const cacheKey = CacheKeys.players.leaderboard(season, 'pitching', sortStat, limit);
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest(`/stats`, {
+        stats: 'season',
+        group: 'pitching', 
+        season: season || new Date().getFullYear(),
+        sportId: 1,
+        gameType: 'R',
+        limit,
+        sortStat,
+        order
+      }),
+      config.cache.ttl.stats
+    );
+  }
+
   // Games endpoints
   async getGameById(gameId: number): Promise<any> {
     const cacheKey = CacheKeys.game.byId(gameId);
