@@ -70,16 +70,27 @@ export class LegacyController {
    */
   async getPlayerBatting(req: Request, res: Response): Promise<void> {
     try {
-      const { year = '2024', stats, orderBy = 'player_name', direction = 'asc' } = req.query;
+      const { 
+        year = '2024', 
+        stats, 
+        orderBy, 
+        sortStat, 
+        direction = 'desc', 
+        limit = '50' 
+      } = req.query;
       
-      logger.info('Player batting request', { year, stats, orderBy, direction });
+      // Support both legacy orderBy and new sortStat parameters
+      const sortParam = (sortStat || orderBy || 'ops') as string;
+      
+      logger.info('Player batting request', { year, stats, sortParam, direction, limit });
 
       const data = await dataSourceService.getData({
         dataType: 'player-batting',
         year: parseInt(year as string),
         stats: stats as string,
-        orderBy: orderBy as string,
-        direction: direction as string
+        orderBy: sortParam,
+        direction: direction as string,
+        limit: limit as string
       });
 
       res.json(data);
@@ -97,16 +108,27 @@ export class LegacyController {
    */
   async getPlayerPitching(req: Request, res: Response): Promise<void> {
     try {
-      const { year = '2024', stats, orderBy = 'player_name', direction = 'asc' } = req.query;
+      const { 
+        year = '2024', 
+        stats, 
+        orderBy, 
+        sortStat, 
+        direction = 'asc', 
+        limit = '50' 
+      } = req.query;
       
-      logger.info('Player pitching request', { year, stats, orderBy, direction });
+      // Support both legacy orderBy and new sortStat parameters
+      const sortParam = (sortStat || orderBy || 'era') as string;
+      
+      logger.info('Player pitching request', { year, stats, sortParam, direction, limit });
 
       const data = await dataSourceService.getData({
         dataType: 'player-pitching',
         year: parseInt(year as string),
         stats: stats as string,
-        orderBy: orderBy as string,
-        direction: direction as string
+        orderBy: sortParam,
+        direction: direction as string,
+        limit: limit as string
       });
 
       res.json(data);
