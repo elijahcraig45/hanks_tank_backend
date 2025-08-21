@@ -28,7 +28,7 @@ export const gcpConfig = {
     // Cache TTL settings (in seconds)
     cacheTTL: {
       historical: parseInt(process.env.CACHE_TTL_HISTORICAL || '86400'), // 24 hours
-      current: parseInt(process.env.CACHE_TTL_CURRENT || '1800'), // 30 minutes
+      current: parseInt(process.env.CACHE_TTL_CURRENT || '900'), // 15 minutes
       live: parseInt(process.env.CACHE_TTL_LIVE || '600'), // 10 minutes
     }
   },

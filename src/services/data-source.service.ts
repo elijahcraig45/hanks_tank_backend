@@ -95,6 +95,29 @@ export class DataSourceService {
   async getData(request: DataRequest): Promise<any> {
     const season = request.season || request.year || this.config.currentSeason;
     
+    // Handle player data with special caching strategy (cache raw data, sort locally)
+    if (request.dataType === 'player-batting' || request.dataType === 'player-stats') {
+      const battingData = await this.getCachedPlayerBattingData(season);
+      return this.sortAndLimitPlayerData(battingData, request.orderBy || 'ops', request.direction || 'desc', parseInt(request.limit || '100'));
+    }
+    
+    if (request.dataType === 'player-pitching') {
+      const pitchingData = await this.getCachedPlayerPitchingData(season);
+      return this.sortAndLimitPlayerData(pitchingData, request.orderBy || 'era', request.direction || 'asc', parseInt(request.limit || '100'));
+    }
+
+    // Handle team data with special caching strategy (cache raw data, sort locally)
+    if (request.dataType === 'team-batting' || request.dataType === 'team-stats') {
+      const teamBattingData = await this.getCachedTeamBattingData(season);
+      return this.sortAndLimitTeamData(teamBattingData, request.orderBy || 'avg', request.direction || 'desc', parseInt(request.limit || '30'));
+    }
+    
+    if (request.dataType === 'team-pitching') {
+      const teamPitchingData = await this.getCachedTeamPitchingData(season);
+      return this.sortAndLimitTeamData(teamPitchingData, request.orderBy || 'era', request.direction || 'asc', parseInt(request.limit || '30'));
+    }
+    
+    // For all other data types, use the original caching approach
     // Update request with computed season for consistent cache key generation
     const requestWithSeason = { ...request, season };
     const cacheKey = this.generateCacheKey(requestWithSeason);
@@ -669,65 +692,6 @@ export class DataSourceService {
         
         return combinedStandings;
 
-      case 'player-stats':
-      case 'player-batting':
-        // Map frontend stat name to MLB API stat name
-        const battingSortStat = this.mapStatNameToMLBAPI(request.orderBy || 'ops', 'batting');
-        
-        logger.info('Player batting request details', {
-          originalOrderBy: request.orderBy,
-          mappedSortStat: battingSortStat,
-          direction: request.direction,
-          limit: request.limit,
-          season
-        });
-        
-        // Get player batting leaderboard from MLB API
-        const battingLeaderboard = await mlbApi.getPlayerBattingLeaderboard(
-          season, 
-          parseInt(request.limit || '100'), 
-          battingSortStat, 
-          request.direction || 'desc'
-        );
-        
-        // Transform the data to match frontend expectations
-        if (battingLeaderboard && battingLeaderboard.stats && battingLeaderboard.stats[0] && battingLeaderboard.stats[0].splits) {
-          const playerStats = battingLeaderboard.stats[0].splits.map((split: any) => ({
-            Name: split.player.fullName,
-            playerId: split.player.id,
-            Team: split.team.name,
-            ...this.transformMLBPlayerStats(split.stat, 'batting'),
-            rank: split.rank
-          }));
-          return playerStats;
-        }
-        return [];
-
-      case 'player-pitching':
-        // Map frontend stat name to MLB API stat name
-        const pitchingSortStat = this.mapStatNameToMLBAPI(request.orderBy || 'era', 'pitching');
-        
-        // Get player pitching leaderboard from MLB API
-        const pitchingLeaderboard = await mlbApi.getPlayerPitchingLeaderboard(
-          season,
-          parseInt(request.limit || '100'),
-          pitchingSortStat,
-          request.direction || 'asc'
-        );
-        
-        // Transform the data to match frontend expectations
-        if (pitchingLeaderboard && pitchingLeaderboard.stats && pitchingLeaderboard.stats[0] && pitchingLeaderboard.stats[0].splits) {
-          const playerStats = pitchingLeaderboard.stats[0].splits.map((split: any) => ({
-            Name: split.player.fullName,
-            playerId: split.player.id,
-            Team: split.team.name,
-            ...this.transformMLBPlayerStats(split.stat, 'pitching'),
-            rank: split.rank
-          }));
-          return playerStats;
-        }
-        return [];
-
       default:
         throw new Error(`Unsupported data type for live API: ${dataType}`);
     }
@@ -827,6 +791,339 @@ export class DataSourceService {
     // This would involve creating proper table schemas and inserting data
     // You can implement this based on your existing data structure
     logger.info('Storing historical data', { season, dataType, recordCount: Array.isArray(data) ? data.length : 1 });
+  }
+
+  /**
+   * Get cached player batting data (unsorted, large dataset)
+   */
+  private async getCachedPlayerBattingData(season: number): Promise<any[]> {
+    const cacheKey = `player-batting-raw-${season}`;
+    
+    // Check cache first
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData && Array.isArray(cachedData)) {
+      logger.info('Retrieved cached player batting data', { season, count: cachedData.length });
+      return cachedData;
+    }
+
+    // Fetch large dataset from MLB API (no sorting, large limit)
+    logger.info('Fetching fresh player batting data from MLB API', { season });
+    const battingLeaderboard = await mlbApi.getPlayerBattingLeaderboard(
+      season, 
+      500, // Large limit to get comprehensive data
+      'ops', // Default sort for API call (we'll sort locally)
+      'desc'
+    );
+
+    // Transform and cache the raw data
+    if (battingLeaderboard && battingLeaderboard.stats && battingLeaderboard.stats[0] && battingLeaderboard.stats[0].splits) {
+      const playerStats = battingLeaderboard.stats[0].splits.map((split: any) => ({
+        Name: split.player.fullName,
+        playerId: split.player.id,
+        Team: split.team.name,
+        ...this.transformMLBPlayerStats(split.stat, 'batting')
+      }));
+      
+      // Cache for 1 hour
+      await cacheService.set(cacheKey, playerStats, 3600);
+      logger.info('Cached player batting data', { season, count: playerStats.length });
+      
+      return playerStats;
+    }
+    
+    return [];
+  }
+
+  /**
+   * Get cached player pitching data (unsorted, large dataset)
+   */
+  private async getCachedPlayerPitchingData(season: number): Promise<any[]> {
+    const cacheKey = `player-pitching-raw-${season}`;
+    
+    // Check cache first
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData && Array.isArray(cachedData)) {
+      logger.info('Retrieved cached player pitching data', { season, count: cachedData.length });
+      return cachedData;
+    }
+
+    // Fetch large dataset from MLB API (no sorting, large limit)
+    logger.info('Fetching fresh player pitching data from MLB API', { season });
+    const pitchingLeaderboard = await mlbApi.getPlayerPitchingLeaderboard(
+      season,
+      500, // Large limit to get comprehensive data
+      'era', // Default sort for API call (we'll sort locally)
+      'asc'
+    );
+
+    // Transform and cache the raw data
+    if (pitchingLeaderboard && pitchingLeaderboard.stats && pitchingLeaderboard.stats[0] && pitchingLeaderboard.stats[0].splits) {
+      const playerStats = pitchingLeaderboard.stats[0].splits.map((split: any) => ({
+        Name: split.player.fullName,
+        playerId: split.player.id,
+        Team: split.team.name,
+        ...this.transformMLBPlayerStats(split.stat, 'pitching')
+      }));
+      
+      // Cache for 1 hour
+      await cacheService.set(cacheKey, playerStats, 3600);
+      logger.info('Cached player pitching data', { season, count: playerStats.length });
+      
+      return playerStats;
+    }
+    
+    return [];
+  }
+
+  /**
+   * Sort and limit player data in backend
+   */
+  private sortAndLimitPlayerData(data: any[], sortField: string, direction: string, limit: number): any[] {
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    logger.info('Sorting player data locally', { 
+      sortField, 
+      direction, 
+      limit, 
+      totalRecords: data.length 
+    });
+
+    // Map frontend field names to actual data field names
+    const fieldMappings: { [key: string]: string } = {
+      'avg': 'AVG',
+      'homeRuns': 'HR',
+      'rbi': 'RBI',
+      'ops': 'OPS',
+      'obp': 'OBP',
+      'slg': 'SLG',
+      'runs': 'R',
+      'hits': 'H',
+      'doubles': '2B',
+      'triples': '3B',
+      'stolenBases': 'SB',
+      'strikeoutsBatting': 'SO', // batting strikeouts
+      'walks': 'BB',
+      'era': 'ERA',
+      'whip': 'WHIP',
+      'strikeoutsPitching': 'SO', // pitching strikeouts
+      'wins': 'W',
+      'saves': 'SV',
+      'innings': 'IP',
+      'fip': 'FIP'
+    };
+
+    const actualField = fieldMappings[sortField] || sortField.toUpperCase();
+    
+    // Sort the data
+    const sortedData = [...data].sort((a, b) => {
+      let aVal = a[actualField];
+      let bVal = b[actualField];
+      
+      // Handle string numbers (remove commas, convert to number)
+      if (typeof aVal === 'string') {
+        aVal = parseFloat(aVal.replace(/,/g, '')) || 0;
+      }
+      if (typeof bVal === 'string') {
+        bVal = parseFloat(bVal.replace(/,/g, '')) || 0;
+      }
+      
+      // Handle null/undefined values
+      if (aVal == null) aVal = direction === 'desc' ? -Infinity : Infinity;
+      if (bVal == null) bVal = direction === 'desc' ? -Infinity : Infinity;
+      
+      // Sort direction
+      return direction === 'desc' ? bVal - aVal : aVal - bVal;
+    });
+
+    // Add rank and limit
+    const limitedData = sortedData.slice(0, limit).map((player, index) => ({
+      ...player,
+      rank: index + 1
+    }));
+
+    logger.info('Data sorted and limited', { 
+      actualField, 
+      direction, 
+      originalCount: data.length, 
+      finalCount: limitedData.length 
+    });
+
+    return limitedData;
+  }
+
+  /**
+   * Get cached team batting data (unsorted, all teams)
+   */
+  private async getCachedTeamBattingData(season: number): Promise<any[]> {
+    const cacheKey = `team-batting-raw-${season}`;
+    
+    // Check cache first
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData && Array.isArray(cachedData)) {
+      logger.info('Retrieved cached team batting data', { season, count: cachedData.length });
+      return cachedData;
+    }
+
+    // Fetch fresh data from MLB API
+    logger.info('Fetching fresh team batting data from MLB API', { season });
+    const allTeams = await mlbApi.getAllTeams(season);
+    const teamStats = [];
+    
+    // Fetch stats for each team
+    for (const team of allTeams.teams) {
+      try {
+        const stats = await mlbApi.getTeamBattingStats(team.id, season);
+        
+        if (stats && stats.stats && stats.stats.length > 0 && stats.stats[0].splits && stats.stats[0].splits.length > 0) {
+          // Transform the stats to match our expected format
+          const teamStatData = {
+            Team: team.name,
+            team_id: team.id,
+            year: season,
+            ...this.transformMLBTeamStats(stats.stats[0].splits[0], 'team-batting')
+          };
+          teamStats.push(teamStatData);
+        }
+      } catch (error) {
+        logger.warn(`Failed to get batting stats for team ${team.name}`, { 
+          teamId: team.id, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
+        // Continue with other teams even if one fails
+      }
+    }
+    
+    // Cache for 1 hour
+    await cacheService.set(cacheKey, teamStats, 3600);
+    logger.info('Cached team batting data', { season, count: teamStats.length });
+    
+    return teamStats;
+  }
+
+  /**
+   * Get cached team pitching data (unsorted, all teams)
+   */
+  private async getCachedTeamPitchingData(season: number): Promise<any[]> {
+    const cacheKey = `team-pitching-raw-${season}`;
+    
+    // Check cache first
+    const cachedData = await cacheService.get(cacheKey);
+    if (cachedData && Array.isArray(cachedData)) {
+      logger.info('Retrieved cached team pitching data', { season, count: cachedData.length });
+      return cachedData;
+    }
+
+    // Fetch fresh data from MLB API
+    logger.info('Fetching fresh team pitching data from MLB API', { season });
+    const allTeams = await mlbApi.getAllTeams(season);
+    const teamStats = [];
+    
+    // Fetch stats for each team
+    for (const team of allTeams.teams) {
+      try {
+        const stats = await mlbApi.getTeamPitchingStats(team.id, season);
+        
+        if (stats && stats.stats && stats.stats.length > 0 && stats.stats[0].splits && stats.stats[0].splits.length > 0) {
+          // Transform the stats to match our expected format
+          const teamStatData = {
+            Team: team.name,
+            team_id: team.id,
+            year: season,
+            ...this.transformMLBTeamStats(stats.stats[0].splits[0], 'team-pitching')
+          };
+          teamStats.push(teamStatData);
+        }
+      } catch (error) {
+        logger.warn(`Failed to get pitching stats for team ${team.name}`, { 
+          teamId: team.id, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
+        // Continue with other teams even if one fails
+      }
+    }
+    
+    // Cache for 1 hour
+    await cacheService.set(cacheKey, teamStats, 3600);
+    logger.info('Cached team pitching data', { season, count: teamStats.length });
+    
+    return teamStats;
+  }
+
+  /**
+   * Sort and limit team data in backend
+   */
+  private sortAndLimitTeamData(data: any[], sortField: string, direction: string, limit: number): any[] {
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    logger.info('Sorting team data locally', { 
+      sortField, 
+      direction, 
+      limit, 
+      totalRecords: data.length 
+    });
+
+    // Map frontend field names to actual data field names
+    const fieldMappings: { [key: string]: string } = {
+      'avg': 'AVG',
+      'homeRuns': 'HR',
+      'rbi': 'RBI',
+      'ops': 'OPS',
+      'obp': 'OBP',
+      'slg': 'SLG',
+      'runs': 'R',
+      'hits': 'H',
+      'doubles': '2B',
+      'triples': '3B',
+      'era': 'ERA',
+      'whip': 'WHIP',
+      'strikeouts': 'SO',
+      'wins': 'W',
+      'saves': 'SV',
+      'innings': 'IP',
+      'fip': 'FIP'
+    };
+
+    const actualField = fieldMappings[sortField] || sortField.toUpperCase();
+    
+    // Sort the data
+    const sortedData = [...data].sort((a, b) => {
+      let aVal = a[actualField];
+      let bVal = b[actualField];
+      
+      // Handle string numbers (remove commas, convert to number)
+      if (typeof aVal === 'string') {
+        aVal = parseFloat(aVal.replace(/,/g, '')) || 0;
+      }
+      if (typeof bVal === 'string') {
+        bVal = parseFloat(bVal.replace(/,/g, '')) || 0;
+      }
+      
+      // Handle null/undefined values
+      if (aVal == null) aVal = direction === 'desc' ? -Infinity : Infinity;
+      if (bVal == null) bVal = direction === 'desc' ? -Infinity : Infinity;
+      
+      // Sort direction
+      return direction === 'desc' ? bVal - aVal : aVal - bVal;
+    });
+
+    // Add rank and limit
+    const limitedData = sortedData.slice(0, limit).map((team, index) => ({
+      ...team,
+      rank: index + 1
+    }));
+
+    logger.info('Team data sorted and limited', { 
+      actualField, 
+      direction, 
+      originalCount: data.length, 
+      finalCount: limitedData.length 
+    });
+
+    return limitedData;
   }
 }
 
