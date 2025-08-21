@@ -281,12 +281,10 @@ class MLBApiService {
     const cacheKey = CacheKeys.teams.stats(teamId, season, 'hitting');
     return this.getCachedOrFetch(
       cacheKey,
-      () => this.makeRequest(`/stats`, { 
+      () => this.makeRequest(`/teams/${teamId}/stats`, { 
         stats: 'season',
         group: 'hitting',
-        season: season || new Date().getFullYear(),
-        gameType: 'R',
-        teamId: teamId
+        season: season || new Date().getFullYear()
       }),
       config.cache.ttl.stats
     );
@@ -296,12 +294,10 @@ class MLBApiService {
     const cacheKey = CacheKeys.teams.stats(teamId, season, 'pitching');
     return this.getCachedOrFetch(
       cacheKey,
-      () => this.makeRequest(`/stats`, { 
+      () => this.makeRequest(`/teams/${teamId}/stats`, { 
         stats: 'season',
         group: 'pitching',
-        season: season || new Date().getFullYear(),
-        gameType: 'R',
-        teamId: teamId
+        season: season || new Date().getFullYear()
       }),
       config.cache.ttl.stats
     );

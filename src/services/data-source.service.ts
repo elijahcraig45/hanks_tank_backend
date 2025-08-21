@@ -427,6 +427,7 @@ export class DataSourceService {
       };
     } else if (dataType === 'team-pitching') {
       return {
+        G: stats.gamesPlayed || 0,
         W: stats.wins || 0,
         L: stats.losses || 0,
         'W-L%': stats.winPercentage || '0.000',
