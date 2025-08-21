@@ -674,6 +674,14 @@ export class DataSourceService {
         // Map frontend stat name to MLB API stat name
         const battingSortStat = this.mapStatNameToMLBAPI(request.orderBy || 'ops', 'batting');
         
+        logger.info('Player batting request details', {
+          originalOrderBy: request.orderBy,
+          mappedSortStat: battingSortStat,
+          direction: request.direction,
+          limit: request.limit,
+          season
+        });
+        
         // Get player batting leaderboard from MLB API
         const battingLeaderboard = await mlbApi.getPlayerBattingLeaderboard(
           season, 
