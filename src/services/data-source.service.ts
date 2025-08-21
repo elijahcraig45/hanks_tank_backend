@@ -34,6 +34,7 @@ export interface DataRequest {
   stats?: string;
   orderBy?: string;
   direction?: string;
+  limit?: string;
   position?: string;
   p_throws?: string;
   stands?: string;
@@ -458,6 +459,68 @@ export class DataSourceService {
   }
 
   /**
+   * Transform MLB API player stats to match frontend expectations
+   */
+  private transformMLBPlayerStats(stats: any, dataType: string): any {
+    if (!stats) {
+      return {};
+    }
+    
+    if (dataType === 'batting') {
+      return {
+        G: stats.gamesPlayed || 0,
+        AB: stats.atBats || 0,
+        R: stats.runs || 0,
+        H: stats.hits || 0,
+        '2B': stats.doubles || 0,
+        '3B': stats.triples || 0,
+        HR: stats.homeRuns || 0,
+        RBI: stats.rbi || 0,
+        SB: stats.stolenBases || 0,
+        CS: stats.caughtStealing || 0,
+        BB: stats.baseOnBalls || 0,
+        SO: stats.strikeOuts || 0,
+        AVG: stats.avg || '0.000',
+        OBP: stats.obp || '0.000',
+        SLG: stats.slg || '0.000',
+        OPS: stats.ops || '0.000',
+        TB: stats.totalBases || 0,
+        HBP: stats.hitByPitch || 0,
+        SF: stats.sacFlies || 0,
+        SH: stats.sacBunts || 0,
+        BABIP: stats.babip || '0.000',
+        PA: stats.plateAppearances || 0
+      };
+    } else if (dataType === 'pitching') {
+      return {
+        G: stats.gamesPitched || stats.gamesPlayed || 0,
+        GS: stats.gamesStarted || 0,
+        W: stats.wins || 0,
+        L: stats.losses || 0,
+        SV: stats.saves || 0,
+        IP: stats.inningsPitched || '0.0',
+        H: stats.hits || 0,
+        R: stats.runs || 0,
+        ER: stats.earnedRuns || 0,
+        HR: stats.homeRuns || 0,
+        BB: stats.baseOnBalls || 0,
+        SO: stats.strikeOuts || 0,
+        ERA: stats.era || '0.00',
+        WHIP: stats.whip || '0.00',
+        'K/9': stats.strikeoutsPer9Inn || '0.00',
+        'BB/9': stats.walksPer9Inn || '0.00',
+        'HR/9': stats.homeRunsPer9 || '0.00',
+        BF: stats.battersFaced || 0,
+        HBP: stats.hitBatsmen || 0,
+        WP: stats.wildPitches || 0,
+        BK: stats.balks || 0
+      };
+    }
+    
+    return {};
+  }
+
+  /**
    * Fetch from live MLB API or FanGraphs (fallback)
    */
   private async getLiveData(request: DataRequest): Promise<any> {
@@ -568,15 +631,48 @@ export class DataSourceService {
 
       case 'player-stats':
       case 'player-batting':
-      case 'player-pitching':
-        // For current season player stats, we might still want to use MLB API
-        // or fall back to FanGraphs for more detailed stats
-        logger.info('Player stats requested - considering FanGraphs fallback', { 
-          dataType, 
+        // Get player batting leaderboard from MLB API
+        const battingLeaderboard = await mlbApi.getPlayerBattingLeaderboard(
           season, 
-          teamId 
-        });
-        throw new Error('Player stats require specific player ID - use player-data endpoint');
+          parseInt(request.limit || '100'), 
+          request.orderBy || 'ops', 
+          request.direction || 'desc'
+        );
+        
+        // Transform the data to match frontend expectations
+        if (battingLeaderboard && battingLeaderboard.stats && battingLeaderboard.stats[0] && battingLeaderboard.stats[0].splits) {
+          const playerStats = battingLeaderboard.stats[0].splits.map((split: any) => ({
+            Name: split.player.fullName,
+            playerId: split.player.id,
+            Team: split.team.name,
+            ...this.transformMLBPlayerStats(split.stat, 'batting'),
+            rank: split.rank
+          }));
+          return playerStats;
+        }
+        return [];
+
+      case 'player-pitching':
+        // Get player pitching leaderboard from MLB API
+        const pitchingLeaderboard = await mlbApi.getPlayerPitchingLeaderboard(
+          season,
+          parseInt(request.limit || '100'),
+          request.orderBy || 'era',
+          request.direction || 'asc'
+        );
+        
+        // Transform the data to match frontend expectations
+        if (pitchingLeaderboard && pitchingLeaderboard.stats && pitchingLeaderboard.stats[0] && pitchingLeaderboard.stats[0].splits) {
+          const playerStats = pitchingLeaderboard.stats[0].splits.map((split: any) => ({
+            Name: split.player.fullName,
+            playerId: split.player.id,
+            Team: split.team.name,
+            ...this.transformMLBPlayerStats(split.stat, 'pitching'),
+            rank: split.rank
+          }));
+          return playerStats;
+        }
+        return [];
 
       default:
         throw new Error(`Unsupported data type for live API: ${dataType}`);
