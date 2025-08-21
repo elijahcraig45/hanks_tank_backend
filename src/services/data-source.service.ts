@@ -806,13 +806,13 @@ export class DataSourceService {
       return cachedData;
     }
 
-    // Fetch large dataset from MLB API (no sorting, large limit)
-    logger.info('Fetching fresh player batting data from MLB API', { season });
+    // Fetch comprehensive dataset from MLB API (all players for the season)
+    logger.info('Fetching comprehensive player batting data from MLB API', { season });
     const battingLeaderboard = await mlbApi.getPlayerBattingLeaderboard(
       season, 
-      1000, // Large limit to get comprehensive data including non-qualified players
-      'ops', // Default sort for API call (we'll sort locally)
-      'desc'
+      5000, // Very large limit to get all players
+      'gamesPlayed', // Sort by games played to get ALL players, not just qualified
+      'asc'
     );
 
     // Transform and cache the raw data
@@ -824,9 +824,16 @@ export class DataSourceService {
         ...this.transformMLBPlayerStats(split.stat, 'batting')
       }));
       
-      // Cache for 1 hour
-      await cacheService.set(cacheKey, playerStats, 3600);
-      logger.info('Cached player batting data', { season, count: playerStats.length });
+      logger.info('MLB API returned batting data', { 
+        season, 
+        totalPlayers: playerStats.length,
+        firstPlayerPA: playerStats[0]?.PA,
+        lastPlayerPA: playerStats[playerStats.length - 1]?.PA
+      });
+      
+      // Cache for 2 hours (longer due to comprehensive dataset size)
+      await cacheService.set(cacheKey, playerStats, 7200);
+      logger.info('Cached comprehensive player batting data', { season, count: playerStats.length });
       
       return playerStats;
     }
@@ -847,12 +854,12 @@ export class DataSourceService {
       return cachedData;
     }
 
-    // Fetch large dataset from MLB API (no sorting, large limit)
-    logger.info('Fetching fresh player pitching data from MLB API', { season });
+    // Fetch comprehensive dataset from MLB API (all players for the season)
+    logger.info('Fetching comprehensive player pitching data from MLB API', { season });
     const pitchingLeaderboard = await mlbApi.getPlayerPitchingLeaderboard(
       season,
-      1000, // Large limit to get comprehensive data including non-qualified players
-      'era', // Default sort for API call (we'll sort locally)
+      5000, // Very large limit to get all players
+      'gamesPlayed', // Sort by games played to get ALL players, not just qualified
       'asc'
     );
 
@@ -865,9 +872,9 @@ export class DataSourceService {
         ...this.transformMLBPlayerStats(split.stat, 'pitching')
       }));
       
-      // Cache for 1 hour
-      await cacheService.set(cacheKey, playerStats, 3600);
-      logger.info('Cached player pitching data', { season, count: playerStats.length });
+      // Cache for 2 hours (longer due to comprehensive dataset size)
+      await cacheService.set(cacheKey, playerStats, 7200);
+      logger.info('Cached comprehensive player pitching data', { season, count: playerStats.length });
       
       return playerStats;
     }
