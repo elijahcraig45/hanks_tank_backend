@@ -325,18 +325,27 @@ class MLBApiService {
   // Player leaderboards endpoints
   async getPlayerBattingLeaderboard(season?: number, limit: number = 100, sortStat: string = 'ops', order: string = 'desc'): Promise<any> {
     const cacheKey = CacheKeys.players.leaderboard(season, 'hitting', sortStat, limit);
+    
+    const params = {
+      stats: 'season',
+      group: 'hitting',
+      season: season || new Date().getFullYear(),
+      sportId: 1,
+      gameType: 'R',
+      limit,
+      sortStat,
+      order
+    };
+    
+    logger.info('MLB API Player Batting Leaderboard Request', {
+      params,
+      cacheKey,
+      endpoint: '/stats'
+    });
+    
     return this.getCachedOrFetch(
       cacheKey,
-      () => this.makeRequest(`/stats`, {
-        stats: 'season',
-        group: 'hitting',
-        season: season || new Date().getFullYear(),
-        sportId: 1,
-        gameType: 'R',
-        limit,
-        sortStat,
-        order
-      }),
+      () => this.makeRequest(`/stats`, params),
       config.cache.ttl.stats
     );
   }
