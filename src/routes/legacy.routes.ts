@@ -21,6 +21,10 @@ router.get('/TeamPitching/avaliableStats', legacyController.getAvailableStats.bi
 router.get('/PlayerBatting', legacyController.getPlayerBatting.bind(legacyController));
 router.get('/PlayerPitching', legacyController.getPlayerPitching.bind(legacyController));
 
+// New Player Leaderboard Endpoints (Phase 1)
+router.get('/player-batting', legacyController.getPlayerBatting.bind(legacyController));
+router.get('/player-pitching', legacyController.getPlayerPitching.bind(legacyController));
+
 // Player Statistics Available Stats
 router.get('/PlayerBatting/avaliableStats', legacyController.getAvailableStats.bind(legacyController));
 router.get('/PlayerPitching/avaliableStats', legacyController.getAvailableStats.bind(legacyController));
