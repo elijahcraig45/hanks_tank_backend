@@ -459,6 +459,46 @@ export class DataSourceService {
   }
 
   /**
+   * Map frontend stat names to MLB API stat names
+   */
+  private mapStatNameToMLBAPI(statName: string, dataType: 'batting' | 'pitching'): string {
+    if (dataType === 'batting') {
+      const battingStatMap: Record<string, string> = {
+        'avg': 'avg',
+        'hr': 'homeRuns',
+        'rbi': 'rbi',
+        'ops': 'ops',
+        'obp': 'onBasePercentage',
+        'slg': 'sluggingPercentage',
+        'runs': 'runs',
+        'hits': 'hits',
+        'doubles': 'doubles',
+        'triples': 'triples',
+        'homeRuns': 'homeRuns',
+        'strikeouts': 'strikeOuts',
+        'walks': 'baseOnBalls',
+        'stolenBases': 'stolenBases'
+      };
+      return battingStatMap[statName.toLowerCase()] || statName;
+    } else {
+      const pitchingStatMap: Record<string, string> = {
+        'era': 'era',
+        'whip': 'whip',
+        'wins': 'wins',
+        'losses': 'losses',
+        'saves': 'saves',
+        'strikeouts': 'strikeOuts',
+        'walks': 'baseOnBalls',
+        'innings': 'inningsPitched',
+        'hits': 'hits',
+        'homeruns': 'homeRuns',
+        'earnedRuns': 'earnedRuns'
+      };
+      return pitchingStatMap[statName.toLowerCase()] || statName;
+    }
+  }
+
+  /**
    * Transform MLB API player stats to match frontend expectations
    */
   private transformMLBPlayerStats(stats: any, dataType: string): any {
@@ -631,11 +671,14 @@ export class DataSourceService {
 
       case 'player-stats':
       case 'player-batting':
+        // Map frontend stat name to MLB API stat name
+        const battingSortStat = this.mapStatNameToMLBAPI(request.orderBy || 'ops', 'batting');
+        
         // Get player batting leaderboard from MLB API
         const battingLeaderboard = await mlbApi.getPlayerBattingLeaderboard(
           season, 
           parseInt(request.limit || '100'), 
-          request.orderBy || 'ops', 
+          battingSortStat, 
           request.direction || 'desc'
         );
         
@@ -653,11 +696,14 @@ export class DataSourceService {
         return [];
 
       case 'player-pitching':
+        // Map frontend stat name to MLB API stat name
+        const pitchingSortStat = this.mapStatNameToMLBAPI(request.orderBy || 'era', 'pitching');
+        
         // Get player pitching leaderboard from MLB API
         const pitchingLeaderboard = await mlbApi.getPlayerPitchingLeaderboard(
           season,
           parseInt(request.limit || '100'),
-          request.orderBy || 'era',
+          pitchingSortStat,
           request.direction || 'asc'
         );
         
