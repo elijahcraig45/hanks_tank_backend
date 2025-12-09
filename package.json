@@ -13,10 +13,11 @@
     "clean": "rm -rf dist",
     "type-check": "npx tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "deploy": "npm run build && gcloud app deploy --quiet",
-    "deploy:prod": "npm run build && gcloud app deploy --promote --quiet",
-    "gcp:logs": "gcloud app logs tail -s default",
-    "gcp:browse": "gcloud app browse"
+    "deploy": "npm run build && gcloud app deploy --quiet --project=hankstank",
+    "deploy:prod": "npm run build && gcloud app deploy --promote --quiet --project=hankstank",
+    "gcp:logs": "gcloud app logs tail -s default --project=hankstank",
+    "gcp:browse": "gcloud app browse --project=hankstank",
+    "gcp:versions": "gcloud app versions list --project=hankstank"
   },
   "repository": {
     "type": "git",

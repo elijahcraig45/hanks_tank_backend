@@ -22,7 +22,7 @@ export const gcpConfig = {
   
   // Data Source Configuration
   dataSource: {
-    currentSeason: new Date().getFullYear(),
+    currentSeason: parseInt(process.env.CURRENT_SEASON || new Date().getFullYear().toString()),
     historicalDataCutoff: parseInt(process.env.HISTORICAL_DATA_CUTOFF || '2'), // Years
     
     // Cache TTL settings (in seconds)
@@ -30,7 +30,11 @@ export const gcpConfig = {
       historical: parseInt(process.env.CACHE_TTL_HISTORICAL || '86400'), // 24 hours
       current: parseInt(process.env.CACHE_TTL_CURRENT || '900'), // 15 minutes
       live: parseInt(process.env.CACHE_TTL_LIVE || '600'), // 10 minutes
-    }
+    },
+    
+    // Season range for data availability
+    minSeason: parseInt(process.env.MIN_SEASON || '2015'),
+    maxSeason: parseInt(process.env.MAX_SEASON || '2026'),
   },
   
   // Authentication
