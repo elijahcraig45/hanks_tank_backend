@@ -342,9 +342,15 @@ export class DataSourceService {
       logger.info('BigQuery data fetched', { 
         dataType,
         year: requestYear,
-        rowCount: rows.length,
+        rowCount: rows ? rows.length : 0,
         jobId: job.id 
       });
+
+      // Check if rows exist before transformation
+      if (!rows || rows.length === 0) {
+        logger.warn('No data returned from BigQuery', { dataType, year: requestYear });
+        return [];
+      }
 
       // Transform the data to match frontend expectations
       const transformedData = this.transformBigQueryData(rows, dataType);
@@ -651,39 +657,43 @@ export class DataSourceService {
           const allTeams = await mlbApi.getAllTeams(season);
           const teamStats = [];
           
-          // Fetch stats for each team
-          for (const team of allTeams.teams) {
-            try {
-              const statType = dataType === 'team-pitching' ? 'pitching' : 'hitting';
-              let stats;
-              if (statType === 'pitching') {
-                stats = await mlbApi.getTeamPitchingStats(team.id, season);
-              } else {
-                stats = await mlbApi.getTeamBattingStats(team.id, season);
-              }
-              
-              if (stats && stats.stats && stats.stats.length > 0 && stats.stats[0].splits && stats.stats[0].splits.length > 0) {
-                // Transform the stats to match our expected format
-                const teamStatData = {
-                  Team: team.name,
-                  team_id: team.id,
-                  year: season,
-                  ...this.transformMLBTeamStats(stats.stats[0].splits[0], dataType)
-                };
-                teamStats.push(teamStatData);
-                
-                // Auto-backup to BigQuery (fire-and-forget)
-                if (this.gcpEnabled && season) {
-                  continuousBackupService.backupTeamStats(team.id, season, stats)
-                    .catch(err => logger.error('Background backup failed', { teamId: team.id, error: err.message }));
-                }
-              }
-            } catch (error) {
-              logger.warn(`Failed to get stats for team ${team.name}`, { 
-                teamId: team.id, 
-                error: error instanceof Error ? error.message : 'Unknown error' 
+          // Fetch stats for all teams in parallel
+          const statType = dataType === 'team-pitching' ? 'pitching' : 'hitting';
+          const teamPromises = allTeams.teams.map(team => {
+            const fetchFunc = statType === 'pitching' 
+              ? mlbApi.getTeamPitchingStats(team.id, season)
+              : mlbApi.getTeamBattingStats(team.id, season);
+            
+            return fetchFunc
+              .then(stats => ({ team, stats, success: true }))
+              .catch(error => {
+                logger.warn(`Failed to get stats for team ${team.name}`, { 
+                  teamId: team.id, 
+                  error: error instanceof Error ? error.message : 'Unknown error' 
+                });
+                return { team, stats: null, success: false };
               });
-              // Continue with other teams even if one fails
+          });
+
+          const results = await Promise.all(teamPromises);
+          
+          for (const result of results) {
+            if (result.success && result.stats && result.stats.stats && result.stats.stats.length > 0 && 
+                result.stats.stats[0].splits && result.stats.stats[0].splits.length > 0) {
+              // Transform the stats to match our expected format
+              const teamStatData = {
+                Team: result.team.name,
+                team_id: result.team.id,
+                year: season,
+                ...this.transformMLBTeamStats(result.stats.stats[0].splits[0], dataType)
+              };
+              teamStats.push(teamStatData);
+              
+              // Auto-backup to BigQuery (fire-and-forget)
+              if (this.gcpEnabled && season) {
+                continuousBackupService.backupTeamStats(result.team.id, season, result.stats)
+                  .catch(err => logger.error('Background backup failed', { teamId: result.team.id, error: err.message }));
+              }
             }
           }
           
