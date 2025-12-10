@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { gcpConfig } from '../config/gcp.config';
 import { BigQuery } from '@google-cloud/bigquery';
 import { mlbApi } from '../services/mlb-api.service';
+import { bigQuerySyncService } from '../services/bigquery-sync.service';
 
 /**
  * Data Validation Controller
@@ -76,24 +77,27 @@ export class DataValidationController {
       const currentSeason = gcpConfig.dataSource.currentSeason;
       const minSeason = gcpConfig.dataSource.minSeason;
       
-      const syncResults = [];
-
-      // Sync all seasons from minSeason to last completed season
-      for (let season = minSeason; season < currentSeason; season++) {
-        logger.info('Syncing season', { season });
-        
-        // This will trigger the existing sync logic
-        // You could call the BigQuerySyncService here
-        syncResults.push({
-          season,
-          status: 'queued',
-        });
+      // Get sync status to identify missing data
+      const syncStatus = await bigQuerySyncService.getSyncStatus();
+      
+      // Calculate total missing years across all tables
+      const totalMissingYears = syncStatus.reduce((sum, s) => sum + s.missingYears.length, 0);
+      
+      // Sync any missing years
+      if (totalMissingYears > 0) {
+        logger.info('Syncing missing data', { totalMissingYears });
+        await bigQuerySyncService.syncMissingData();
       }
 
       res.json({
         success: true,
-        message: 'Weekly full sync initiated',
-        seasons: syncResults,
+        message: 'Weekly full sync complete',
+        syncStatus: {
+          totalTables: syncStatus.length,
+          completelysynced: syncStatus.filter(s => s.isComplete).length,
+          totalMissingYears,
+          tables: syncStatus,
+        },
       });
     } catch (error) {
       logger.error('Weekly full sync failed', { 
@@ -119,12 +123,16 @@ export class DataValidationController {
 
       logger.info('Syncing completed season', { season: completedSeason });
 
-      // Trigger full sync for the completed season
-      // This should backup all teams, players, standings, games, etc.
+      // Sync all data for the completed season
+      await Promise.all([
+        bigQuerySyncService.syncTeams(completedSeason),
+        bigQuerySyncService.syncTeamStats(completedSeason),
+        bigQuerySyncService.syncStandings(completedSeason),
+      ]);
 
       res.json({
         success: true,
-        message: 'End-of-season sync initiated',
+        message: 'End-of-season sync complete',
         season: completedSeason,
       });
     } catch (error) {
