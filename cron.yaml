@@ -1,0 +1,43 @@
+cron:
+# Automatically sync previous year's data to BigQuery every January 2nd at 2 AM
+- description: "Annual BigQuery sync for completed MLB season"
+  url: /api/sync/missing
+  schedule: 0 2 2 1 *  # January 2nd at 2:00 AM (after season is finalized)
+  timezone: America/New_York
+  target: default
+  retry_parameters:
+    min_backoff_seconds: 10
+    max_doublings: 5
+
+# Daily validation job - compare BigQuery data vs MLB API
+# Runs at 3 AM ET every day during season
+- description: "Daily data validation check"
+  url: /api/validation/daily-check
+  schedule: 0 3 * * *  # Every day at 3:00 AM
+  timezone: America/New_York
+  target: default
+  retry_parameters:
+    min_backoff_seconds: 2.5
+    max_doublings: 5
+
+# Weekly full sync - ensure all historical data is backed up
+# Runs every Sunday at 2 AM ET
+- description: "Weekly full historical sync"
+  url: /api/sync/weekly-full
+  schedule: 0 2 * * 0  # Every Sunday at 2:00 AM
+  timezone: America/New_York
+  target: default
+  retry_parameters:
+    min_backoff_seconds: 5
+    max_doublings: 3
+
+# Monthly data integrity check
+# Runs first day of every month at 4 AM ET
+- description: "Monthly data integrity audit"
+  url: /api/validation/monthly-audit
+  schedule: 0 4 1 * *  # 1st of every month at 4:00 AM
+  timezone: America/New_York
+  target: default
+  retry_parameters:
+    min_backoff_seconds: 5
+    max_doublings: 3
