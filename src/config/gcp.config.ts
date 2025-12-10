@@ -34,7 +34,8 @@ export const gcpConfig = {
     
     // Season range for data availability
     minSeason: parseInt(process.env.MIN_SEASON || '2015'),
-    maxSeason: parseInt(process.env.MAX_SEASON || '2026'),
+    // maxSeason is for safety - defaults to current year + 10 years
+    maxSeason: parseInt(process.env.MAX_SEASON || (new Date().getFullYear() + 10).toString()),
   },
   
   // Authentication

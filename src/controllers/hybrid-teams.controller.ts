@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { dataSourceService } from '../services/data-source.service';
 import { mlbApi } from '../services/mlb-api.service';
+import { gcpConfig } from '../config/gcp.config';
 import { ResponseFormatter } from '../utils/response-formatter';
 import { logger } from '../utils/logger';
 
@@ -33,7 +34,7 @@ export class HybridTeamsController {
         teams: Array.isArray(data) ? data : (data.teams || []),
         metadata: {
           total: Array.isArray(data) ? data.length : (data.teams?.length || 0),
-          season: parsedSeason || new Date().getFullYear(),
+          season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid',
           cached: false // This will be updated by the service
@@ -77,7 +78,7 @@ export class HybridTeamsController {
         team: data,
         metadata: {
           teamId: parseInt(teamId),
-          season: parsedSeason || new Date().getFullYear(),
+          season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'
         }
@@ -119,7 +120,7 @@ export class HybridTeamsController {
         roster: data,
         metadata: {
           teamId: parseInt(teamId),
-          season: parsedSeason || new Date().getFullYear(),
+          season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'
         }
@@ -161,7 +162,7 @@ export class HybridTeamsController {
         schedule: data,
         metadata: {
           teamId: parseInt(teamId),
-          season: parsedSeason || new Date().getFullYear(),
+          season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'
         }
@@ -205,7 +206,7 @@ export class HybridTeamsController {
         stats: data,
         metadata: {
           teamId: parseInt(teamId),
-          season: parsedSeason || new Date().getFullYear(),
+          season: parsedSeason || gcpConfig.dataSource.currentSeason,
           statType,
           responseTime,
           source: 'hybrid'
@@ -245,7 +246,7 @@ export class HybridTeamsController {
       res.json(ResponseFormatter.success({
         standings: data,
         metadata: {
-          season: parsedSeason || new Date().getFullYear(),
+          season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'
         }

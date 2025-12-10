@@ -71,6 +71,19 @@ curl "https://hankstank.uc.r.appspot.com/api/PlayerBatting?year=2024"
 | `GET /api/statcast` | Statcast pitch data | `year`, `playerId`, `position` |
 | `GET /api/availableStats` | Available statistics | `dataType` |
 
+### BigQuery Sync Endpoints (Data Management)
+
+| Endpoint | Description | Parameters |
+|----------|-------------|------------|
+| `GET /api/sync/status` | Check sync status for all tables | None |
+| `POST /api/sync/missing` | Sync all missing historical data | `forceRefresh`, `years`, `tables` |
+| `POST /api/sync/teams/:year` | Sync teams for specific year | `forceRefresh` |
+| `POST /api/sync/team-stats/:year` | Sync team stats for specific year | `forceRefresh` |
+| `POST /api/sync/player-stats/:year` | Sync player stats for specific year | `forceRefresh` |
+| `POST /api/sync/standings/:year` | Sync standings for specific year | `forceRefresh` |
+
+📖 **See [BigQuery Sync Quick Start](./BIGQUERY_SYNC_QUICKSTART.md)** for usage examples
+
 ## 🏛️ Project Structure
 
 ```
