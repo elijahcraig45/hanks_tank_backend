@@ -14,6 +14,7 @@ import { fanGraphsService, FanGraphsService } from './fangraphs.service';
 import { cacheService } from './cache.service';
 import { logger } from '../utils/logger';
 import { gcpConfig, validateGCPConfig } from '../config/gcp.config';
+import { continuousBackupService } from './continuous-backup.service';
 
 export interface DataSourceConfig {
   currentSeason: number;
@@ -143,7 +144,8 @@ export class DataSourceService {
         data = await this.getHistoricalData(requestWithSeason);
       } else {
         logger.info('Fetching from live MLB API', { season, dataType: requestWithSeason.dataType });
-        data = await this.getLiveData(requestWithSeason);
+        // Use safe wrapper that falls back to BigQuery on MLB API failure
+        data = await this.getLiveDataWithFallback(requestWithSeason);
       }
 
       // Cache the result with appropriate TTL
@@ -630,11 +632,20 @@ export class DataSourceService {
         if (teamId) {
           // Get stats for a specific team
           const statType = dataType === 'team-pitching' ? 'pitching' : 'hitting';
+          let teamStatsData;
           if (statType === 'pitching') {
-            return await mlbApi.getTeamPitchingStats(teamId, season);
+            teamStatsData = await mlbApi.getTeamPitchingStats(teamId, season);
           } else {
-            return await mlbApi.getTeamBattingStats(teamId, season);
+            teamStatsData = await mlbApi.getTeamBattingStats(teamId, season);
           }
+          
+          // Auto-backup to BigQuery (fire-and-forget, don't wait)
+          if (this.gcpEnabled && season) {
+            continuousBackupService.backupTeamStats(teamId, season, teamStatsData)
+              .catch(err => logger.error('Background backup failed', { error: err.message }));
+          }
+          
+          return teamStatsData;
         } else {
           // Get stats for all teams
           const allTeams = await mlbApi.getAllTeams(season);
@@ -660,6 +671,12 @@ export class DataSourceService {
                   ...this.transformMLBTeamStats(stats.stats[0].splits[0], dataType)
                 };
                 teamStats.push(teamStatData);
+                
+                // Auto-backup to BigQuery (fire-and-forget)
+                if (this.gcpEnabled && season) {
+                  continuousBackupService.backupTeamStats(team.id, season, stats)
+                    .catch(err => logger.error('Background backup failed', { teamId: team.id, error: err.message }));
+                }
               }
             } catch (error) {
               logger.warn(`Failed to get stats for team ${team.name}`, { 
@@ -675,7 +692,15 @@ export class DataSourceService {
 
       case 'roster':
         if (!teamId) throw new Error('Team ID required for roster data');
-        return await mlbApi.getTeamRoster(teamId, season);
+        const rosterData = await mlbApi.getTeamRoster(teamId, season);
+        
+        // Auto-backup to BigQuery (fire-and-forget)
+        if (this.gcpEnabled && season) {
+          continuousBackupService.backupRoster(teamId, season, rosterData)
+            .catch(err => logger.error('Background roster backup failed', { error: err.message }));
+        }
+        
+        return rosterData;
 
       case 'schedule':
         if (!teamId) throw new Error('Team ID required for schedule data');
@@ -701,10 +726,56 @@ export class DataSourceService {
           combinedStandings.records.push(...nlStandings.records);
         }
         
+        // Auto-backup to BigQuery (fire-and-forget)
+        if (this.gcpEnabled && season) {
+          continuousBackupService.backupStandings(season, combinedStandings)
+            .catch(err => logger.error('Background standings backup failed', { error: err.message }));
+        }
+        
         return combinedStandings;
 
       default:
         throw new Error(`Unsupported data type for live API: ${dataType}`);
+    }
+  }
+
+  /**
+   * Fetch live data with automatic fallback to BigQuery on failure
+   * This ensures resilience if MLB API goes down
+   */
+  private async getLiveDataWithFallback(request: DataRequest): Promise<any> {
+    try {
+      // Try live MLB API first
+      return await this.getLiveData(request);
+    } catch (mlbApiError) {
+      logger.error('MLB API failed, attempting BigQuery fallback', { 
+        error: mlbApiError instanceof Error ? mlbApiError.message : String(mlbApiError),
+        request 
+      });
+
+      // If MLB API fails and we have GCP enabled, try BigQuery as fallback
+      if (this.gcpEnabled && request.season) {
+        try {
+          logger.info('Falling back to BigQuery for data', { 
+            season: request.season, 
+            dataType: request.dataType 
+          });
+          
+          // Try to get data from BigQuery
+          return await this.getFromBigQuery(request);
+        } catch (bqError) {
+          logger.error('BigQuery fallback also failed', { 
+            error: bqError instanceof Error ? bqError.message : String(bqError),
+            request 
+          });
+          
+          // Re-throw original MLB API error since that's the primary source
+          throw mlbApiError;
+        }
+      } else {
+        // No fallback available, re-throw error
+        throw mlbApiError;
+      }
     }
   }
 
@@ -842,6 +913,19 @@ export class DataSourceService {
         lastPlayerPA: playerStats[playerStats.length - 1]?.PA
       });
       
+      // Auto-backup each player to BigQuery (fire-and-forget)
+      if (this.gcpEnabled) {
+        for (const player of playerStats) {
+          if (player.playerId) {
+            continuousBackupService.backupPlayerStats(player.playerId, season, player)
+              .catch(err => logger.error('Background player backup failed', { 
+                playerId: player.playerId, 
+                error: err.message 
+              }));
+          }
+        }
+      }
+      
       // Cache for 2 hours (longer due to comprehensive dataset size)
       await cacheService.set(cacheKey, playerStats, 7200);
       logger.info('Cached comprehensive player batting data', { season, count: playerStats.length });
@@ -882,6 +966,19 @@ export class DataSourceService {
         Team: split.team.name,
         ...this.transformMLBPlayerStats(split.stat, 'pitching')
       }));
+      
+      // Auto-backup each player to BigQuery (fire-and-forget)
+      if (this.gcpEnabled) {
+        for (const player of playerStats) {
+          if (player.playerId) {
+            continuousBackupService.backupPlayerStats(player.playerId, season, player)
+              .catch(err => logger.error('Background player backup failed', { 
+                playerId: player.playerId, 
+                error: err.message 
+              }));
+          }
+        }
+      }
       
       // Cache for 2 hours (longer due to comprehensive dataset size)
       await cacheService.set(cacheKey, playerStats, 7200);
