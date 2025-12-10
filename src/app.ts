@@ -5,6 +5,7 @@ import { config } from './config/app';
 import { logger, logStartup } from './utils/logger';
 import hybridTeamsRoutes from './routes/hybrid-teams.routes';
 import legacyRoutes from './routes/legacy.routes';
+import bigquerySyncRoutes from './routes/bigquery-sync.routes';
 import { validateGCPConfig } from './config/gcp.config';
 import { schedulerService } from './services/scheduler.service';
 
@@ -52,6 +53,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/v2/teams', hybridTeamsRoutes); // Hybrid routes with intelligent data sourcing
+app.use('/api/sync', bigquerySyncRoutes); // BigQuery sync management
 app.use('/api', legacyRoutes); // Legacy endpoints for backward compatibility
 
 // 404 handler

@@ -18,6 +18,7 @@ import { gcpConfig, validateGCPConfig } from '../config/gcp.config';
 export interface DataSourceConfig {
   currentSeason: number;
   historicalDataCutoff: number; // Years to consider as historical
+  minHistoricalSeason: number; // Earliest year of historical data
   gcpProjectId: string;
   gcpBucketName: string;
   bigQueryDataset: string;
@@ -76,6 +77,7 @@ export class DataSourceService {
     this.config = {
       currentSeason: gcpConfig.dataSource.currentSeason,
       historicalDataCutoff: gcpConfig.dataSource.historicalDataCutoff,
+      minHistoricalSeason: gcpConfig.dataSource.minSeason,
       gcpProjectId: gcpConfig.projectId,
       gcpBucketName: gcpConfig.storage.bucketName,
       bigQueryDataset: gcpConfig.bigQuery.dataset
@@ -85,7 +87,10 @@ export class DataSourceService {
       gcpEnabled: this.gcpEnabled,
       projectId: this.config.gcpProjectId,
       bucket: this.config.gcpBucketName,
-      dataset: this.config.bigQueryDataset
+      dataset: this.config.bigQueryDataset,
+      currentSeason: this.config.currentSeason,
+      minHistoricalSeason: this.config.minHistoricalSeason,
+      historicalYearRange: `${this.config.minHistoricalSeason}-${this.config.currentSeason - 1}`
     });
   }
 
@@ -167,9 +172,10 @@ export class DataSourceService {
     }
 
     const currentSeason = this.config.currentSeason;
-    const yearsOld = currentSeason - season;
+    const minHistoricalSeason = this.config.minHistoricalSeason;
+    const lastCompletedSeason = currentSeason - 1;
     
-    // Data types we have historical data for (2015-2024)
+    // Data types we have historical data for
     const historicalDataTypes = ['team-stats', 'team-batting', 'team-pitching', 'standings'];
     
     // Player data types that should use MLB API (no historical player data yet)
@@ -181,20 +187,25 @@ export class DataSourceService {
       return false;
     }
     
-    // Check if the requested season is within our historical data range (2015-2024)
-    if (season < 2015 || season > 2024) {
-      logger.info('Season outside historical data range (2015-2024), using MLB API', { season, dataType });
+    // Check if the requested season is within our historical data range
+    // Only use historical data for completed seasons (before current season)
+    if (season < minHistoricalSeason || season >= currentSeason) {
+      logger.info('Season outside historical data range or is current season, using MLB API', { 
+        season, 
+        dataType, 
+        minHistoricalSeason, 
+        currentSeason 
+      });
       return false;
     }
     
-    // For current season (2025), always use MLB API for live data
-    if (season === currentSeason) {
-      logger.info('Current season requested, using MLB API for live data', { season, dataType });
-      return false;
-    }
-
-    // For seasons 2015-2024, use historical data for team stats
-    logger.info('Using historical data for team stats', { season, dataType });
+    // At this point, season is within historical range and is a historical data type
+    logger.info('Using historical data', { 
+      season, 
+      dataType, 
+      minHistoricalSeason, 
+      lastCompletedSeason 
+    });
     return true;
   }
 

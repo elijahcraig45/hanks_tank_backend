@@ -1,6 +1,7 @@
 // MLB StatsAPI Service
 import axios from 'axios';
 import { config } from '../config/app';
+import { gcpConfig } from '../config/gcp.config';
 import { logger } from '../utils/logger';
 import { cacheService } from './cache.service';
 import { CacheKeys } from '../utils/cache-keys';
@@ -269,7 +270,7 @@ class MLBApiService {
       () => this.makeRequest(`/stats`, { 
         stats: 'season',
         group: group || 'hitting',
-        season: season || new Date().getFullYear(),
+        season: season || gcpConfig.dataSource.currentSeason,
         gameType: 'R',
         teamId: teamId
       }),
@@ -284,7 +285,7 @@ class MLBApiService {
       () => this.makeRequest(`/teams/${teamId}/stats`, { 
         stats: 'season',
         group: 'hitting',
-        season: season || new Date().getFullYear()
+        season: season || gcpConfig.dataSource.currentSeason
       }),
       config.cache.ttl.stats
     );
@@ -297,7 +298,7 @@ class MLBApiService {
       () => this.makeRequest(`/teams/${teamId}/stats`, { 
         stats: 'season',
         group: 'pitching',
-        season: season || new Date().getFullYear()
+        season: season || gcpConfig.dataSource.currentSeason
       }),
       config.cache.ttl.stats
     );
@@ -329,7 +330,7 @@ class MLBApiService {
     const params = {
       stats: 'season',
       group: 'hitting',
-      season: season || new Date().getFullYear(),
+      season: season || gcpConfig.dataSource.currentSeason,
       sportId: 1,
       gameType: 'R',
       limit,
@@ -357,7 +358,7 @@ class MLBApiService {
       () => this.makeRequest(`/stats`, {
         stats: 'season',
         group: 'pitching', 
-        season: season || new Date().getFullYear(),
+        season: season || gcpConfig.dataSource.currentSeason,
         sportId: 1,
         gameType: 'R',
         limit,
@@ -496,6 +497,33 @@ class MLBApiService {
       logger.error('MLB API health check failed', { error });
       return false;
     }
+  }
+
+  // Additional methods for BigQuery sync
+  async getTeamsForYear(season: number): Promise<MLBTeam[]> {
+    const result = await this.getAllTeams(season);
+    return result.teams || [];
+  }
+
+  async getTeamStatsForSync(season: number, group: 'hitting' | 'pitching'): Promise<any> {
+    return this.makeRequest('/stats', {
+      stats: 'season',
+      group,
+      season,
+      sportId: 1,
+      gameType: 'R'
+    });
+  }
+
+  async getPlayerStatsForSync(season: number, group: 'hitting' | 'pitching', limit: number = 100): Promise<any> {
+    return this.makeRequest('/stats', {
+      stats: 'season',
+      group,
+      season,
+      sportId: 1,
+      gameType: 'R',
+      limit
+    });
   }
 }
 
