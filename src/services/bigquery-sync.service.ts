@@ -374,7 +374,7 @@ class BigQuerySyncService {
   }
 
   /**
-   * Sync player stats data to BigQuery
+   * Sync player stats data to BigQuery - Gets ALL players from all teams
    */
   async syncPlayerStats(year: number, forceRefresh: boolean = false): Promise<SyncResult> {
     const tableName = 'player_stats_historical';
@@ -394,83 +394,180 @@ class BigQuerySyncService {
         }
       }
 
-      logger.info(`Fetching player stats data for ${year}`, { year });
+      logger.info(`Fetching comprehensive player stats data for ${year}`, { year });
       
-      // Note: Player stats endpoint returns limited data
-      // This is a placeholder - you may want to enhance this with more comprehensive player data
-      const [battingLeaders, pitchingLeaders] = await Promise.all([
-        mlbApi.getPlayerStatsForSync(year, 'hitting', 50),
-        mlbApi.getPlayerStatsForSync(year, 'pitching', 50)
-      ]);
-
+      // Get all teams first to iterate through their stats
+      const teams = await mlbApi.getTeamsForYear(year);
       const rows: any[] = [];
-
-      // Process batting leaders
-      if (battingLeaders?.stats?.[0]?.splits) {
-        for (const split of battingLeaders.stats[0].splits) {
-          const player = split.player;
-          const team = split.team;
-          const stats = split.stat;
+      
+      // Fetch player stats for each team to get ALL players (not just top 50)
+      for (const team of teams) {
+        try {
+          logger.info(`Fetching player stats for ${team.name} (${year})`);
           
-          rows.push({
-            year,
-            player_id: player.id,
-            player_name: player.fullName,
-            team_id: team?.id,
-            team_name: team?.name,
-            stat_type: 'batting',
-            games_played: stats.gamesPlayed || 0,
-            plate_appearances: stats.plateAppearances || 0,
-            at_bats: stats.atBats || 0,
-            runs: stats.runs || 0,
-            hits: stats.hits || 0,
-            doubles: stats.doubles || 0,
-            triples: stats.triples || 0,
-            home_runs: stats.homeRuns || 0,
-            rbi: stats.rbi || 0,
-            stolen_bases: stats.stolenBases || 0,
-            caught_stealing: stats.caughtStealing || 0,
-            walks: stats.baseOnBalls || 0,
-            strikeouts: stats.strikeOuts || 0,
-            batting_avg: parseFloat(stats.avg || '0'),
-            obp: parseFloat(stats.obp || '0'),
-            slg: parseFloat(stats.slg || '0'),
-            ops: parseFloat(stats.ops || '0')
+          // Get batting stats for this team
+          const battingStats = await mlbApi.getTeamStatsForSync(year, 'hitting');
+          if (battingStats?.stats?.[0]?.splits) {
+            for (const split of battingStats.stats[0].splits) {
+              if (split.team?.id === team.id && split.player?.id) {
+                const player = split.player;
+                const stats = split.stat;
+                
+                rows.push({
+                  year,
+                  player_id: player.id,
+                  player_name: player.fullName,
+                  team_id: team.id,
+                  team_name: team.name,
+                  stat_type: 'batting',
+                  games_played: stats.gamesPlayed || 0,
+                  plate_appearances: stats.plateAppearances || 0,
+                  at_bats: stats.atBats || 0,
+                  runs: stats.runs || 0,
+                  hits: stats.hits || 0,
+                  doubles: stats.doubles || 0,
+                  triples: stats.triples || 0,
+                  home_runs: stats.homeRuns || 0,
+                  rbi: stats.rbi || 0,
+                  stolen_bases: stats.stolenBases || 0,
+                  caught_stealing: stats.caughtStealing || 0,
+                  walks: stats.baseOnBalls || 0,
+                  strikeouts: stats.strikeOuts || 0,
+                  batting_avg: parseFloat(stats.avg || '0'),
+                  obp: parseFloat(stats.obp || '0'),
+                  slg: parseFloat(stats.slg || '0'),
+                  ops: parseFloat(stats.ops || '0')
+                });
+              }
+            }
+          }
+          
+          // Get pitching stats for this team
+          const pitchingStats = await mlbApi.getTeamStatsForSync(year, 'pitching');
+          if (pitchingStats?.stats?.[0]?.splits) {
+            for (const split of pitchingStats.stats[0].splits) {
+              if (split.team?.id === team.id && split.player?.id) {
+                const player = split.player;
+                const stats = split.stat;
+                
+                rows.push({
+                  year,
+                  player_id: player.id,
+                  player_name: player.fullName,
+                  team_id: team.id,
+                  team_name: team.name,
+                  stat_type: 'pitching',
+                  games_played: stats.gamesPlayed || 0,
+                  wins: stats.wins || 0,
+                  losses: stats.losses || 0,
+                  era: parseFloat(stats.era || '0'),
+                  games_started: stats.gamesStarted || 0,
+                  complete_games: stats.completeGames || 0,
+                  shutouts: stats.shutouts || 0,
+                  saves: stats.saves || 0,
+                  innings_pitched: parseFloat(stats.inningsPitched || '0'),
+                  hits_allowed: stats.hits || 0,
+                  runs_allowed: stats.runs || 0,
+                  earned_runs: stats.earnedRuns || 0,
+                  home_runs_allowed: stats.homeRuns || 0,
+                  walks_allowed: stats.baseOnBalls || 0,
+                  strikeouts: stats.strikeOuts || 0,
+                  whip: parseFloat(stats.whip || '0')
+                });
+              }
+            }
+          }
+          
+          // Small delay between teams to avoid rate limiting
+          await this.delay(500);
+        } catch (error) {
+          logger.warn(`Error fetching player stats for team ${team.name}`, {
+            error: error instanceof Error ? error.message : 'Unknown error'
           });
         }
       }
+      
+      // Also get top performers across the league to ensure we don't miss anyone
+      const [battingLeaders, pitchingLeaders] = await Promise.all([
+        mlbApi.getPlayerStatsForSync(year, 'hitting', 100),
+        mlbApi.getPlayerStatsForSync(year, 'pitching', 100)
+      ]);
 
-      // Process pitching leaders
+      // Add league leaders to ensure no one is missed (check for duplicates by player_id)
+      const playerIds = new Set(rows.map(r => r.player_id));
+
+      // Process batting leaders (only add if not already in rows)
+      if (battingLeaders?.stats?.[0]?.splits) {
+        for (const split of battingLeaders.stats[0].splits) {
+          const player = split.player;
+          if (!playerIds.has(player.id)) {
+            const team = split.team;
+            const stats = split.stat;
+            
+            rows.push({
+              year,
+              player_id: player.id,
+              player_name: player.fullName,
+              team_id: team?.id,
+              team_name: team?.name,
+              stat_type: 'batting',
+              games_played: stats.gamesPlayed || 0,
+              plate_appearances: stats.plateAppearances || 0,
+              at_bats: stats.atBats || 0,
+              runs: stats.runs || 0,
+              hits: stats.hits || 0,
+              doubles: stats.doubles || 0,
+              triples: stats.triples || 0,
+              home_runs: stats.homeRuns || 0,
+              rbi: stats.rbi || 0,
+              stolen_bases: stats.stolenBases || 0,
+              caught_stealing: stats.caughtStealing || 0,
+              walks: stats.baseOnBalls || 0,
+              strikeouts: stats.strikeOuts || 0,
+              batting_avg: parseFloat(stats.avg || '0'),
+              obp: parseFloat(stats.obp || '0'),
+              slg: parseFloat(stats.slg || '0'),
+              ops: parseFloat(stats.ops || '0')
+            });
+            playerIds.add(player.id);
+          }
+        }
+      }
+
+      // Process pitching leaders (only add if not already in rows)
       if (pitchingLeaders?.stats?.[0]?.splits) {
         for (const split of pitchingLeaders.stats[0].splits) {
           const player = split.player;
-          const team = split.team;
-          const stats = split.stat;
-          
-          rows.push({
-            year,
-            player_id: player.id,
-            player_name: player.fullName,
-            team_id: team?.id,
-            team_name: team?.name,
-            stat_type: 'pitching',
-            games_played: stats.gamesPlayed || 0,
-            wins: stats.wins || 0,
-            losses: stats.losses || 0,
-            era: parseFloat(stats.era || '0'),
-            games_started: stats.gamesStarted || 0,
-            complete_games: stats.completeGames || 0,
-            shutouts: stats.shutouts || 0,
-            saves: stats.saves || 0,
-            innings_pitched: parseFloat(stats.inningsPitched || '0'),
-            hits_allowed: stats.hits || 0,
-            runs_allowed: stats.runs || 0,
-            earned_runs: stats.earnedRuns || 0,
-            home_runs_allowed: stats.homeRuns || 0,
-            walks_allowed: stats.baseOnBalls || 0,
-            strikeouts: stats.strikeOuts || 0,
-            whip: parseFloat(stats.whip || '0')
-          });
+          if (!playerIds.has(player.id)) {
+            const team = split.team;
+            const stats = split.stat;
+            
+            rows.push({
+              year,
+              player_id: player.id,
+              player_name: player.fullName,
+              team_id: team?.id,
+              team_name: team?.name,
+              stat_type: 'pitching',
+              games_played: stats.gamesPlayed || 0,
+              wins: stats.wins || 0,
+              losses: stats.losses || 0,
+              era: parseFloat(stats.era || '0'),
+              games_started: stats.gamesStarted || 0,
+              complete_games: stats.completeGames || 0,
+              shutouts: stats.shutouts || 0,
+              saves: stats.saves || 0,
+              innings_pitched: parseFloat(stats.inningsPitched || '0'),
+              hits_allowed: stats.hits || 0,
+              runs_allowed: stats.runs || 0,
+              earned_runs: stats.earnedRuns || 0,
+              home_runs_allowed: stats.homeRuns || 0,
+              walks_allowed: stats.baseOnBalls || 0,
+              strikeouts: stats.strikeOuts || 0,
+              whip: parseFloat(stats.whip || '0')
+            });
+            playerIds.add(player.id);
+          }
         }
       }
 
@@ -593,6 +690,189 @@ class BigQuerySyncService {
   }
 
   /**
+   * Sync rosters data to BigQuery
+   */
+  async syncRosters(year: number, forceRefresh: boolean = false): Promise<SyncResult> {
+    const tableName = 'rosters_historical';
+    
+    try {
+      if (!forceRefresh) {
+        const exists = await this.checkDataExists(tableName, year);
+        if (exists) {
+          logger.info(`Rosters data for ${year} already exists, skipping`, { year, tableName });
+          return {
+            success: true,
+            tableName,
+            year,
+            recordsAdded: 0,
+            recordsUpdated: 0
+          };
+        }
+      }
+
+      logger.info(`Fetching rosters data for ${year}`, { year });
+      const teams = await mlbApi.getTeamsForYear(year);
+      const rows: any[] = [];
+
+      for (const team of teams) {
+        try {
+          const rosterData = await mlbApi.getTeamRoster(team.id, year);
+          
+          if (rosterData?.roster) {
+            for (const player of rosterData.roster) {
+              rows.push({
+                year,
+                team_id: team.id,
+                team_name: team.name,
+                player_id: player.person?.id,
+                player_name: player.person?.fullName,
+                jersey_number: player.jerseyNumber,
+                position_code: player.position?.code,
+                position_name: player.position?.name,
+                position_type: player.position?.type,
+                status: player.status?.code
+              });
+            }
+          }
+          
+          // Small delay between teams
+          await this.delay(500);
+        } catch (error) {
+          logger.warn(`Error fetching roster for team ${team.name}`, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      const recordsModified = await this.insertOrReplaceData(tableName, year, rows);
+
+      logger.info(`Successfully synced rosters data for ${year}`, {
+        year,
+        tableName,
+        recordsModified
+      });
+
+      return {
+        success: true,
+        tableName,
+        year,
+        recordsAdded: recordsModified,
+        recordsUpdated: 0
+      };
+    } catch (error) {
+      logger.error(`Error syncing rosters data for ${year}`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        year
+      });
+      return {
+        success: false,
+        tableName,
+        year,
+        recordsAdded: 0,
+        recordsUpdated: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Sync games data to BigQuery
+   */
+  async syncGames(year: number, forceRefresh: boolean = false): Promise<SyncResult> {
+    const tableName = 'games_historical';
+    
+    try {
+      if (!forceRefresh) {
+        const exists = await this.checkDataExists(tableName, year);
+        if (exists) {
+          logger.info(`Games data for ${year} already exists, skipping`, { year, tableName });
+          return {
+            success: true,
+            tableName,
+            year,
+            recordsAdded: 0,
+            recordsUpdated: 0
+          };
+        }
+      }
+
+      logger.info(`Fetching games data for ${year}`, { year });
+      
+      // Get full season schedule
+      const startDate = `${year}-03-01`;
+      const endDate = `${year}-11-30`;
+      const scheduleData = await mlbApi.getSchedule(startDate, endDate, undefined, 1);
+      
+      const rows: any[] = [];
+
+      if (scheduleData?.dates) {
+        for (const date of scheduleData.dates) {
+          for (const game of date.games || []) {
+            // Only include regular season and playoff games
+            if (game.gameType === 'R' || game.gameType === 'F' || game.gameType === 'D' || game.gameType === 'L' || game.gameType === 'W') {
+              rows.push({
+                year,
+                game_pk: game.gamePk,
+                game_type: game.gameType,
+                season: game.season,
+                game_date: game.gameDate,
+                official_date: date.date,
+                status: game.status?.detailedState,
+                abstract_game_state: game.status?.abstractGameState,
+                home_team_id: game.teams?.home?.team?.id,
+                home_team_name: game.teams?.home?.team?.name,
+                home_score: game.teams?.home?.score || 0,
+                home_is_winner: game.teams?.home?.isWinner || false,
+                away_team_id: game.teams?.away?.team?.id,
+                away_team_name: game.teams?.away?.team?.name,
+                away_score: game.teams?.away?.score || 0,
+                away_is_winner: game.teams?.away?.isWinner || false,
+                venue_id: game.venue?.id,
+                venue_name: game.venue?.name,
+                day_night: game.dayNight,
+                scheduled_innings: game.scheduledInnings || 9,
+                series_game_number: game.seriesGameNumber,
+                games_in_series: game.gamesInSeries,
+                series_description: game.seriesDescription,
+                double_header: game.doubleHeader || 'N'
+              });
+            }
+          }
+        }
+      }
+
+      const recordsModified = await this.insertOrReplaceData(tableName, year, rows);
+
+      logger.info(`Successfully synced games data for ${year}`, {
+        year,
+        tableName,
+        recordsModified
+      });
+
+      return {
+        success: true,
+        tableName,
+        year,
+        recordsAdded: recordsModified,
+        recordsUpdated: 0
+      };
+    } catch (error) {
+      logger.error(`Error syncing games data for ${year}`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        year
+      });
+      return {
+        success: false,
+        tableName,
+        year,
+        recordsAdded: 0,
+        recordsUpdated: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
    * Sync all missing data for historical years
    */
   async syncMissingData(options: SyncOptions = {}): Promise<SyncResult[]> {
@@ -630,6 +910,12 @@ class BigQuerySyncService {
             break;
           case 'standings_historical':
             result = await this.syncStandings(year, options.forceRefresh);
+            break;
+          case 'rosters_historical':
+            result = await this.syncRosters(year, options.forceRefresh);
+            break;
+          case 'games_historical':
+            result = await this.syncGames(year, options.forceRefresh);
             break;
           default:
             logger.warn(`Sync not implemented for ${tableStatus.tableName}`);
