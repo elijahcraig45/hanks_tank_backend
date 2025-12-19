@@ -5,6 +5,8 @@
 
 import { Request, Response } from 'express';
 import { bigQuerySyncService } from '../services/bigquery-sync.service';
+import { statcastCollectorService } from '../services/statcast-collector.service';
+import cloudTasksService from '../services/cloud-tasks.service';
 import { gcpConfig } from '../config/gcp.config';
 import { logger } from '../utils/logger';
 
@@ -282,6 +284,230 @@ export class BigQuerySyncController {
         error: {
           code: 'SYNC_STANDINGS_ERROR',
           message: 'Failed to sync standings data',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * POST /api/sync/rosters/:year
+   * Sync rosters data for a specific year
+   */
+  async syncRosters(req: Request, res: Response): Promise<void> {
+    try {
+      const { year } = req.params;
+      const { forceRefresh = false } = req.body;
+      
+      const validation = this.validateYear(year);
+      if (!validation.isValid) {
+        res.status(400).json({
+          success: false,
+          error: validation.error
+        });
+        return;
+      }
+      const yearNum = validation.yearNum!;
+
+      logger.info(`Syncing rosters data for ${yearNum}`, { year: yearNum, forceRefresh });
+
+      const result = await bigQuerySyncService.syncRosters(yearNum, forceRefresh);
+
+      res.json({
+        success: result.success,
+        result,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Error syncing rosters data', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'SYNC_ROSTERS_ERROR',
+          message: 'Failed to sync rosters data',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * POST /api/sync/games/:year
+   * Sync games data for a specific year
+   */
+  async syncGames(req: Request, res: Response): Promise<void> {
+    try {
+      const { year } = req.params;
+      const { forceRefresh = false } = req.body;
+      
+      const validation = this.validateYear(year);
+      if (!validation.isValid) {
+        res.status(400).json({
+          success: false,
+          error: validation.error
+        });
+        return;
+      }
+      const yearNum = validation.yearNum!;
+
+      logger.info(`Syncing games data for ${yearNum}`, { year: yearNum, forceRefresh });
+
+      const result = await bigQuerySyncService.syncGames(yearNum, forceRefresh);
+
+      res.json({
+        success: result.success,
+        result,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Error syncing games data', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'SYNC_GAMES_ERROR',
+          message: 'Failed to sync games data',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * POST /api/sync/statcast/:year
+   * Sync Statcast pitch-by-pitch data for a specific year using Cloud Tasks
+   */
+  async syncStatcast(req: Request, res: Response): Promise<void> {
+    try {
+      const { year } = req.params;
+      const { test = false } = req.body; // Add test mode for single month
+      
+      const validation = this.validateYear(year);
+      if (!validation.isValid) {
+        res.status(400).json({
+          success: false,
+          error: validation.error
+        });
+        return;
+      }
+      const yearNum = validation.yearNum!;
+
+      logger.info(`Creating Cloud Tasks for Statcast data collection: ${yearNum}`, { year: yearNum, test });
+
+      // Create Cloud Tasks for the season (one task per month)
+      const taskNames = await cloudTasksService.createSeasonCollectionTasks(yearNum, test);
+
+      const monthCount = test ? 1 : 8; // 8 months in MLB season
+      res.json({
+        success: true,
+        result: {
+          year: yearNum,
+          tasksCreated: taskNames.length,
+          expectedTasks: monthCount,
+          message: test 
+            ? `Test mode: Created ${taskNames.length} task for ${yearNum}. Collection will complete in ~5-10 minutes.`
+            : `Created ${taskNames.length} tasks for ${yearNum} season. Collection will complete in ~2-3 hours. Monitor BigQuery for progress.`,
+          queueName: 'statcast-collection'
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Error creating Statcast collection tasks', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'SYNC_STATCAST_ERROR',
+          message: 'Failed to create Statcast collection tasks',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+  }
+
+  /**
+   * POST /api/sync/statcast/process-task
+   * Process a single Statcast collection task (called by Cloud Tasks)
+   */
+  async processStatcastTask(req: Request, res: Response): Promise<void> {
+    try {
+      const { year, startDate, endDate, month } = req.body;
+
+      if (!year || !startDate || !endDate) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_TASK_PAYLOAD',
+            message: 'Task payload must include year, startDate, and endDate'
+          }
+        });
+        return;
+      }
+
+      logger.info(`Processing Statcast collection task`, {
+        year,
+        month,
+        startDate,
+        endDate
+      });
+
+      // Collect data for this specific date range
+      const pitches = await statcastCollectorService.collectStatcastData(startDate, endDate);
+
+      if (pitches.length > 0) {
+        // Store the collected data
+        await statcastCollectorService.storeStatcastData(pitches, year);
+        
+        logger.info(`Task completed: ${month} ${year}`, {
+          year,
+          month,
+          pitchesCollected: pitches.length,
+          dateRange: `${startDate} to ${endDate}`
+        });
+
+        res.json({
+          success: true,
+          result: {
+            year,
+            month,
+            pitchesCollected: pitches.length,
+            dateRange: `${startDate} to ${endDate}`
+          }
+        });
+      } else {
+        logger.info(`No pitches found for ${month} ${year}`, {
+          year,
+          month,
+          startDate,
+          endDate
+        });
+
+        res.json({
+          success: true,
+          result: {
+            year,
+            month,
+            pitchesCollected: 0,
+            message: 'No pitches found for this date range'
+          }
+        });
+      }
+    } catch (error) {
+      logger.error('Error processing Statcast collection task', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        body: req.body
+      });
+      
+      // Return 500 so Cloud Tasks will retry
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'TASK_PROCESSING_ERROR',
+          message: 'Failed to process Statcast collection task',
           details: error instanceof Error ? error.message : 'Unknown error'
         }
       });

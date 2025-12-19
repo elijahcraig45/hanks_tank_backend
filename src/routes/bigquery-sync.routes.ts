@@ -19,5 +19,12 @@ router.post('/teams/:year', bigQuerySyncController.syncTeams.bind(bigQuerySyncCo
 router.post('/team-stats/:year', bigQuerySyncController.syncTeamStats.bind(bigQuerySyncController));
 router.post('/player-stats/:year', bigQuerySyncController.syncPlayerStats.bind(bigQuerySyncController));
 router.post('/standings/:year', bigQuerySyncController.syncStandings.bind(bigQuerySyncController));
+router.post('/rosters/:year', bigQuerySyncController.syncRosters.bind(bigQuerySyncController));
+router.post('/games/:year', bigQuerySyncController.syncGames.bind(bigQuerySyncController));
+
+// Task handler endpoint for Cloud Tasks (called by GCP task queue)
+// IMPORTANT: This must come BEFORE /statcast/:year to avoid route collision
+router.post('/statcast/process-task', bigQuerySyncController.processStatcastTask.bind(bigQuerySyncController));
+router.post('/statcast/:year', bigQuerySyncController.syncStatcast.bind(bigQuerySyncController));
 
 export default router;
