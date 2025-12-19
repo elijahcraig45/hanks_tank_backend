@@ -47,11 +47,12 @@ const fileFormat = winston.format.combine(
 );
 
 // Create logger
-export const logger = winston.createLogger({
-  level: config.logging.level,
-  format: fileFormat,
-  defaultMeta: { service: 'hanks-tank-backend' },
-  transports: [
+const transports: winston.transport[] = [];
+
+// In production (App Engine), only use console logging (file system is read-only)
+// In development, use both file and console logging
+if (config.nodeEnv !== 'production') {
+  transports.push(
     // Error log file
     new winston.transports.File({
       filename: `./logs/error.log`,
@@ -78,26 +79,31 @@ export const logger = winston.createLogger({
         winston.format.json()
       )
     })
-  ],
-});
-
-// Add console transport for development
-if (config.nodeEnv !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: logFormat
-  }));
+  );
 }
 
-// Add console transport for production with limited output
-if (config.nodeEnv === 'production') {
-  logger.add(new winston.transports.Console({
-    level: 'warn', // Only warnings and errors to console in production
+// Add console transport
+if (config.nodeEnv !== 'production') {
+  transports.push(new winston.transports.Console({
+    format: logFormat
+  }));
+} else {
+  // Production: use console with JSON format for Google Cloud Logging
+  transports.push(new winston.transports.Console({
+    level: config.logging.level,
     format: winston.format.combine(
       winston.format.timestamp(),
-      winston.format.simple()
+      winston.format.json()
     )
   }));
 }
+
+export const logger = winston.createLogger({
+  level: config.logging.level,
+  format: fileFormat,
+  defaultMeta: { service: 'hanks-tank-backend' },
+  transports
+});
 
 // MLB API specific logger
 export const mlbApiLogger = logger.child({ component: 'mlb-api' });

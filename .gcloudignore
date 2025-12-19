@@ -5,6 +5,7 @@
 .env.test
 build.sh
 deploy.sh
+deploy.log
 
 # Ignore version control
 .git/
@@ -46,3 +47,8 @@ Thumbs.db
 
 # Ignore package-lock.json to reduce size
 package-lock.json
+
+# Ignore data directories (not needed for production - BigQuery is the source)
+data/
+logs/
+scripts/__pycache__/
