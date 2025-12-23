@@ -225,4 +225,55 @@ export class TransactionsController {
       });
     }
   }
+
+  /**
+   * Get transactions for a specific player
+   * GET /api/transactions/player/:playerId?startDate=2025-01-01&endDate=2025-12-31
+   */
+  static async getPlayerTransactions(req: Request, res: Response): Promise<void> {
+    try {
+      const playerId = parseInt(req.params.playerId);
+      const { startDate, endDate } = req.query;
+      
+      if (isNaN(playerId)) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_PLAYER_ID',
+            message: 'Player ID must be a number'
+          }
+        });
+        return;
+      }
+      
+      const filters: any = { playerId };
+      if (startDate) filters.startDate = startDate as string;
+      if (endDate) filters.endDate = endDate as string;
+      
+      const transactions = await transactionsService.getTransactions(filters);
+      
+      res.json({
+        success: true,
+        data: transactions,
+        meta: {
+          playerId,
+          count: transactions.length,
+          startDate,
+          endDate,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      logger.error('Error in getPlayerTransactions controller', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'FETCH_ERROR',
+          message: 'Failed to fetch player transactions'
+        }
+      });
+    }
+  }
 }
