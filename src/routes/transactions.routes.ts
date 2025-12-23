@@ -23,4 +23,7 @@ router.get('/team/:teamId', TransactionsController.getTeamTransactions);
 // Get transaction type breakdown for a team
 router.get('/team/:teamId/breakdown', TransactionsController.getTransactionBreakdown);
 
+// Get transactions for a specific player
+router.get('/player/:playerId', TransactionsController.getPlayerTransactions);
+
 export default router;
