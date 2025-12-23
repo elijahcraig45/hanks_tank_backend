@@ -9,6 +9,7 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { gcpConfig } from '../config/gcp.config';
 import { logger } from '../utils/logger';
 import { mlbApi } from './mlb-api.service';
+import { transactionsService } from './transactions.service';
 
 export interface SyncStatus {
   tableName: string;
@@ -21,7 +22,7 @@ export interface SyncStatus {
 
 export interface SyncOptions {
   years?: number[];
-  tables?: ('teams' | 'team_stats' | 'player_stats' | 'standings' | 'games' | 'rosters')[];
+  tables?: ('teams' | 'team_stats' | 'player_stats' | 'standings' | 'games' | 'rosters' | 'transactions')[];
   forceRefresh?: boolean;
 }
 
@@ -75,7 +76,8 @@ class BigQuerySyncService {
       'player_stats_historical',
       'standings_historical',
       'games_historical',
-      'rosters_historical'
+      'rosters_historical',
+      'transactions_historical'
     ];
 
     const statusResults: SyncStatus[] = [];
@@ -917,6 +919,9 @@ class BigQuerySyncService {
           case 'games_historical':
             result = await this.syncGames(year, options.forceRefresh);
             break;
+          case 'transactions_historical':
+            result = await this.syncTransactions(year, options.forceRefresh);
+            break;
           default:
             logger.warn(`Sync not implemented for ${tableStatus.tableName}`);
             continue;
@@ -948,7 +953,7 @@ class BigQuerySyncService {
 
   /**
    * Insert or replace data in BigQuery table
-   * Deletes existing data for the year first, then inserts new data
+   * Deletes existing data for the year first, then inserts new data in chunks
    */
   private async insertOrReplaceData(tableName: string, year: number, rows: any[]): Promise<number> {
     if (rows.length === 0) {
@@ -965,17 +970,144 @@ class BigQuerySyncService {
     await this.bigquery.query({ query: deleteQuery });
     logger.info(`Deleted existing data for ${tableName} year ${year}`);
 
-    // Insert new data
+    // Insert new data in chunks to avoid "Request Entity Too Large" errors
+    const chunkSize = 5000; // Insert 5000 rows at a time
     const table = this.bigquery.dataset(this.dataset).table(tableName);
-    await table.insert(rows);
+    let totalInserted = 0;
 
-    logger.info(`Inserted ${rows.length} rows into ${tableName}`, {
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      
+      try {
+        await table.insert(chunk);
+        totalInserted += chunk.length;
+        
+        logger.info(`Inserted chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(rows.length / chunkSize)}`, {
+          tableName,
+          year,
+          chunkSize: chunk.length,
+          progress: `${totalInserted}/${rows.length}`
+        });
+      } catch (error) {
+        logger.error(`Error inserting chunk ${Math.floor(i / chunkSize) + 1}`, {
+          tableName,
+          year,
+          error: error instanceof Error ? error.message : String(error),
+          chunkStart: i,
+          chunkSize: chunk.length
+        });
+        throw error;
+      }
+      
+      // Small delay between chunks to avoid rate limiting
+      if (i + chunkSize < rows.length) {
+        await this.delay(100);
+      }
+    }
+
+    logger.info(`Successfully inserted ${totalInserted} rows into ${tableName}`, {
       tableName,
       year,
-      rowCount: rows.length
+      rowCount: totalInserted
     });
 
-    return rows.length;
+    return totalInserted;
+  }
+
+  /**
+   * Utility delay function
+  
+  /**
+   * Sync transactions data to BigQuery
+   */
+  async syncTransactions(year: number, forceRefresh: boolean = false): Promise<SyncResult> {
+    const tableName = 'transactions_historical';
+    
+    try {
+      if (!forceRefresh) {
+        const exists = await this.checkDataExists(tableName, year);
+        if (exists) {
+          logger.info(`Transactions data for ${year} already exists, skipping`, { year, tableName });
+          return {
+            success: true,
+            tableName,
+            year,
+            recordsAdded: 0,
+            recordsUpdated: 0
+          };
+        }
+      }
+
+      logger.info(`Fetching transactions data for ${year}`, { year });
+      
+      const transactions = await transactionsService.getTransactionsByYear(year);
+
+      if (!transactions || transactions.length === 0) {
+        logger.warn(`No transactions data found for ${year}`, { year });
+        return {
+          success: true,
+          tableName,
+          year,
+          recordsAdded: 0,
+          recordsUpdated: 0
+        };
+      }
+
+      const rows = transactions.map(t => ({
+        year,
+        transaction_id: t.id || null,
+        date: t.date || '',
+        type_code: t.typeCode || null,
+        type_desc: t.typeDesc || null,
+        description: t.description || null,
+        from_team_id: t.fromTeam?.id || null,
+        from_team_name: t.fromTeam?.name || null,
+        from_team_abbreviation: t.fromTeam?.abbreviation || null,
+        to_team_id: t.toTeam?.id || null,
+        to_team_name: t.toTeam?.name || null,
+        to_team_abbreviation: t.toTeam?.abbreviation || null,
+        person_id: t.person?.id || 0,
+        person_full_name: t.person?.fullName || 'Unknown',
+        person_link: t.person?.link || null,
+        resolution: t.resolution || null,
+        notes: t.notes || null,
+        synced_at: new Date().toISOString()
+      })).filter(row => row.person_id > 0 && row.date); // Only include rows with valid person and date
+
+      logger.info(`Prepared ${rows.length} rows for BigQuery insert (filtered from ${transactions.length})`, {
+        year,
+        tableName
+      });
+
+      const recordsModified = await this.insertOrReplaceData(tableName, year, rows);
+
+      logger.info(`Successfully synced transactions data for ${year}`, {
+        year,
+        tableName,
+        recordsModified
+      });
+
+      return {
+        success: true,
+        tableName,
+        year,
+        recordsAdded: recordsModified,
+        recordsUpdated: 0
+      };
+    } catch (error) {
+      logger.error(`Error syncing transactions data for ${year}`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        year
+      });
+      return {
+        success: false,
+        tableName,
+        year,
+        recordsAdded: 0,
+        recordsUpdated: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 
   /**

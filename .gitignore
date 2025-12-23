@@ -131,3 +131,23 @@ dist
 
 # npm registry config (use global settings)
 .npmrc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local data processing temp files
+local_data_processing/*.log
+local_data_processing/*.pid
+
+# Deployment logs
+deploy*.log
+
+# BigQuery service account keys (keep schema files)
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!jest.config.js
+!jest.config.json
+!scripts/bigquery/*.json

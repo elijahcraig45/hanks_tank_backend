@@ -7,6 +7,7 @@ import hybridTeamsRoutes from './routes/hybrid-teams.routes';
 import legacyRoutes from './routes/legacy.routes';
 import bigquerySyncRoutes from './routes/bigquery-sync.routes';
 import validationRoutes from './routes/validation.routes';
+import transactionsRoutes from './routes/transactions.routes';
 import { validateGCPConfig } from './config/gcp.config';
 import { schedulerService } from './services/scheduler.service';
 
@@ -53,6 +54,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
+app.use('/api/transactions', transactionsRoutes); // MLB transactions
 app.use('/api/v2/teams', hybridTeamsRoutes); // Hybrid routes with intelligent data sourcing
 app.use('/api/sync', bigquerySyncRoutes); // BigQuery sync management
 app.use('/api/validation', validationRoutes); // Data validation and scheduled jobs

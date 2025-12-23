@@ -97,6 +97,9 @@ export const CacheKeys = {
   news: (source: string, params?: any) => `news:${source}:${JSON.stringify(params || {})}`,
   weather: (venueId: number, date: string) => `weather:${venueId}:${date}`,
   
+  // Transactions
+  transactions: (params?: any) => `transactions:${JSON.stringify(params || {})}`,
+  
   // Predictions
   predictions: (type: string, params: any) => `predictions:${type}:${JSON.stringify(params)}`,
   
@@ -137,6 +140,7 @@ export const CacheTTL = {
   standings: 900, // 15 minutes
   schedule: 900, // 15 minutes
   news: 900, // 15 minutes
+  transactions: 3600, // 1 hour
 
   // Live data (changes very frequently)
   liveGames: 30, // 30 seconds

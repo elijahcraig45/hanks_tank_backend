@@ -19,7 +19,10 @@
     "deploy:prod": "npm run build && gcloud app deploy --promote --quiet --project=hankstank",
     "gcp:logs": "gcloud app logs tail -s default --project=hankstank",
     "gcp:browse": "gcloud app browse --project=hankstank",
-    "gcp:versions": "gcloud app versions list --project=hankstank"
+    "gcp:versions": "gcloud app versions list --project=hankstank",
+    "transactions:setup": "bash scripts/setup_transactions.sh",
+    "transactions:collect": "node scripts/collect_historical_transactions.js",
+    "transactions:collect:year": "node scripts/collect_historical_transactions.js --years"
   },
   "repository": {
     "type": "git",
