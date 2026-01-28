@@ -53,7 +53,8 @@ export class TransactionsController {
    */
   static async getTeamTransactions(req: Request, res: Response): Promise<void> {
     try {
-      const teamId = parseInt(req.params.teamId);
+      const teamIdParam = Array.isArray(req.params.teamId) ? req.params.teamId[0] : req.params.teamId;
+      const teamId = parseInt(teamIdParam);
       const { startDate, endDate } = req.query;
       
       if (isNaN(teamId)) {
@@ -135,7 +136,8 @@ export class TransactionsController {
    */
   static async getTransactionsByYear(req: Request, res: Response): Promise<void> {
     try {
-      const year = parseInt(req.params.year);
+      const yearParam = Array.isArray(req.params.year) ? req.params.year[0] : req.params.year;
+      const year = parseInt(yearParam);
       
       if (isNaN(year) || year < 2000 || year > 2030) {
         res.status(400).json({
@@ -179,7 +181,8 @@ export class TransactionsController {
    */
   static async getTransactionBreakdown(req: Request, res: Response): Promise<void> {
     try {
-      const teamId = parseInt(req.params.teamId);
+      const teamIdParam = Array.isArray(req.params.teamId) ? req.params.teamId[0] : req.params.teamId;
+      const teamId = parseInt(teamIdParam);
       const { startDate, endDate } = req.query;
       
       if (isNaN(teamId)) {
@@ -232,7 +235,8 @@ export class TransactionsController {
    */
   static async getPlayerTransactions(req: Request, res: Response): Promise<void> {
     try {
-      const playerId = parseInt(req.params.playerId);
+      const playerIdParam = Array.isArray(req.params.playerId) ? req.params.playerId[0] : req.params.playerId;
+      const playerId = parseInt(playerIdParam);
       const { startDate, endDate } = req.query;
       
       if (isNaN(playerId)) {

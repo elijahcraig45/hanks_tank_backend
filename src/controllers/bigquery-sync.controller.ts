@@ -16,8 +16,9 @@ export class BigQuerySyncController {
    * Validate year parameter is within acceptable range for historical data
    * Only completed seasons (minSeason through currentSeason - 1)
    */
-  private validateYear(year: string): { isValid: boolean; yearNum?: number; error?: any } {
-    const yearNum = parseInt(year);
+  private validateYear(year: string | string[]): { isValid: boolean; yearNum?: number; error?: any } {
+    const yearStr = Array.isArray(year) ? year[0] : year;
+    const yearNum = parseInt(yearStr);
     const minYear = gcpConfig.dataSource.minSeason;
     const maxYear = gcpConfig.dataSource.currentSeason - 1;
     

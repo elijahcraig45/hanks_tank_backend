@@ -62,7 +62,7 @@ export class HybridTeamsController {
       
       const data = await dataSourceService.getData({
         season: parsedSeason,
-        teamId: parseInt(teamId),
+        teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
         dataType: 'team-stats'
       });
       
@@ -77,7 +77,7 @@ export class HybridTeamsController {
       res.json(ResponseFormatter.success({
         team: data,
         metadata: {
-          teamId: parseInt(teamId),
+          teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
           season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'
@@ -104,7 +104,7 @@ export class HybridTeamsController {
       
       const data = await dataSourceService.getData({
         season: parsedSeason,
-        teamId: parseInt(teamId),
+        teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
         dataType: 'roster'
       });
       
@@ -119,7 +119,7 @@ export class HybridTeamsController {
       res.json(ResponseFormatter.success({
         roster: data,
         metadata: {
-          teamId: parseInt(teamId),
+          teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
           season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'
@@ -146,7 +146,7 @@ export class HybridTeamsController {
       
       const data = await dataSourceService.getData({
         season: parsedSeason,
-        teamId: parseInt(teamId),
+        teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
         dataType: 'schedule'
       });
       
@@ -161,7 +161,7 @@ export class HybridTeamsController {
       res.json(ResponseFormatter.success({
         schedule: data,
         metadata: {
-          teamId: parseInt(teamId),
+          teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
           season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'
@@ -188,7 +188,7 @@ export class HybridTeamsController {
       
       const data = await dataSourceService.getData({
         season: parsedSeason,
-        teamId: parseInt(teamId),
+        teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
         dataType: 'team-stats',
         statType: statType as 'batting' | 'pitching' | 'fielding'
       });
@@ -205,7 +205,7 @@ export class HybridTeamsController {
       res.json(ResponseFormatter.success({
         stats: data,
         metadata: {
-          teamId: parseInt(teamId),
+          teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
           season: parsedSeason || gcpConfig.dataSource.currentSeason,
           statType,
           responseTime,
