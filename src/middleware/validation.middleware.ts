@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 
 export const validateTeamId = (req: Request, res: Response, next: NextFunction): void => {
   const { id } = req.params;
-  const teamId = parseInt(id);
+  const teamId = parseInt(Array.isArray(id) ? id[0] : id);
   
   if (isNaN(teamId) || teamId < 1) {
     res.status(400).json({
