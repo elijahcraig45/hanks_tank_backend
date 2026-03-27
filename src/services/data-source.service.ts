@@ -319,7 +319,7 @@ export class DataSourceService {
 
       case 'standings':
         query = `
-          SELECT * FROM \`${this.config.gcpProjectId}.${this.config.bigQueryDataset}.standings_historical\`
+          SELECT * FROM \`${this.config.gcpProjectId}.mlb_2026_season.standings\`
           WHERE year = ${requestYear}
           ORDER BY league_id, division_id, games_back
         `;
