@@ -41,3 +41,18 @@ cron:
   retry_parameters:
     min_backoff_seconds: 5
     max_doublings: 3
+
+# Pre-game lineup scheduler — runs every morning during MLB season (Mar–Nov).
+# Fetches today's game schedule and enqueues one Cloud Task per game,
+# each scheduled to fire 90 minutes before that game's first pitch.
+# The Cloud Task triggers: lineup fetch → matchup features → prediction.
+# Cost impact: ~15 API calls/day + Cloud Tasks queue usage (minimal).
+- description: "Schedule pre-game lineup and prediction tasks for today's games"
+  url: /api/lineup/schedule-today
+  schedule: 0 10 * * *  # 10:00 AM ET daily (most lineups posted by noon ET)
+  timezone: America/New_York
+  target: default
+  retry_parameters:
+    min_backoff_seconds: 30
+    max_doublings: 3
+
