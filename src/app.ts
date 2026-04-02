@@ -8,6 +8,7 @@ import legacyRoutes from './routes/legacy.routes';
 import bigquerySyncRoutes from './routes/bigquery-sync.routes';
 import validationRoutes from './routes/validation.routes';
 import transactionsRoutes from './routes/transactions.routes';
+import lineupRoutes from './routes/lineup.routes';
 import { validateGCPConfig } from './config/gcp.config';
 import { schedulerService } from './services/scheduler.service';
 
@@ -58,6 +59,7 @@ app.use('/api/transactions', transactionsRoutes); // MLB transactions
 app.use('/api/v2/teams', hybridTeamsRoutes); // Hybrid routes with intelligent data sourcing
 app.use('/api/sync', bigquerySyncRoutes); // BigQuery sync management
 app.use('/api/validation', validationRoutes); // Data validation and scheduled jobs
+app.use('/api/lineup', lineupRoutes); // Lineup scheduling and pre-game task management
 app.use('/api', legacyRoutes); // Legacy endpoints for backward compatibility
 
 // 404 handler
