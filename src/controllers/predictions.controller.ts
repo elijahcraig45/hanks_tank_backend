@@ -109,7 +109,7 @@ class PredictionsController {
    */
   async getPredictionByGame(req: Request, res: Response): Promise<void> {
     try {
-      const gamePk = parseInt(req.params.gamePk, 10);
+      const gamePk = parseInt(String(req.params.gamePk), 10);
       if (isNaN(gamePk)) {
         res.status(400).json({ success: false, error: { code: 'INVALID_GAME_PK' } });
         return;
