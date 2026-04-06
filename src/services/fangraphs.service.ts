@@ -162,26 +162,64 @@ export class FanGraphsService {
   }
 
   /**
+   * Parse a single CSV line, respecting double-quoted fields that may contain commas.
+   */
+  private parseCSVLine(line: string): string[] {
+    const fields: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            // Escaped quote ("") → literal "
+            current += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ',') {
+          fields.push(current);
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+    }
+    fields.push(current);
+    return fields;
+  }
+
+  /**
    * Helper method to parse CSV to JSON
    */
   private parseCSVToJSON(csvText: string): any[] {
     const lines = csvText.split('\n');
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(',').map((header: string) => header.trim());
+    // Strip surrounding quotes from header names
+    const headers = this.parseCSVLine(lines[0]).map((h: string) => h.trim().replace(/^"|"$/g, ''));
     const result: any[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
-      const values = line.split(',');
+      const values = this.parseCSVLine(line);
       const obj: any = {};
 
       headers.forEach((header: string, index: number) => {
-        const value = values[index]?.trim() || '';
+        const raw = values[index]?.trim() ?? '';
         // Try to parse as number if it looks like one
-        obj[header] = isNaN(Number(value)) ? value : Number(value);
+        const asNum = Number(raw);
+        obj[header] = raw !== '' && !isNaN(asNum) ? asNum : raw;
       });
 
       result.push(obj);
