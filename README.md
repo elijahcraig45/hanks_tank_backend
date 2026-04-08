@@ -1,337 +1,203 @@
-# Hanks Tank Backend - MLB Analytics API
+# Hank's Tank Backend — MLB Analytics REST API
 
-A modern, scalable backend service for MLB analytics providing historical data, real-time statistics, and advanced analytics through a hybrid data architecture.
+> **Production:** [https://hankstank.uc.r.appspot.com](https://hankstank.uc.r.appspot.com)  
+> **Part of:** [hanks_tank](../hanks_tank) · **hanks_tank_backend** ← · [hanks_tank_ml](../hanks_tank_ml)
 
-## 🏗️ Architecture Overview
+TypeScript/Express REST API serving 35,000+ records of historical MLB data from Google BigQuery, supplemented with live MLB Stats API data and daily ML predictions. Deployed to Google Cloud App Engine as the `default` service.
 
-This backend service implements a **hybrid data architecture** that intelligently routes requests between multiple data sources:
+---
 
-- **BigQuery Historical Data** (2015-2024): 35,000+ records of comprehensive historical MLB data
-- **FanGraphs API**: Advanced player analytics and Statcast information
-- **MLB API**: Real-time games and current season data
+## ✨ Key Capabilities
 
-## 🚀 Deployment
+- **Hybrid data routing** — BigQuery for historical seasons (2015–2024), MLB Stats API for live current-season data
+- **ML predictions** — reads daily V8 ensemble predictions from BigQuery, exposes all 54 columns (Elo, Pythagorean, arsenal, bullpen, streaks, H2H) with deduplication
+- **Statcast** — per-player pitch-level Statcast data queryable by year, batter hand, pitch type, and outcome
+- **News** — MLB + Braves news feed with manual refresh endpoint
+- **Transactions** — team transaction history (2015–present)
+- **Request deduplication** via `ROW_NUMBER() OVER (PARTITION BY game_pk ORDER BY predicted_at DESC)`
 
-**Production Service**: [https://hankstank.uc.r.appspot.com](https://hankstank.uc.r.appspot.com)
+---
 
-### Quick Start
+## 🏗️ Architecture
 
-```bash
-# Health Check
-curl https://hankstank.uc.r.appspot.com/health
-
-# Team Batting Stats
-curl "https://hankstank.uc.r.appspot.com/api/teamBatting?year=2024"
-
-# Player Statistics
-curl "https://hankstank.uc.r.appspot.com/api/PlayerBatting?year=2024"
+```
+Client (React SPA)
+    │
+    └── GET /api/*
+          │
+    ┌─────┴─────────────────────────────────────┐
+    │     Express + TypeScript (App Engine)      │
+    │                                            │
+    │  Route handlers (src/routes/)              │
+    │  Controllers  (src/controllers/)           │
+    │                                            │
+    ├── BigQuery client  ──► mlb_2026_season.*   │
+    │   (35K+ records)                           │
+    ├── MLB Stats API    ──► statsapi.mlb.com    │
+    ├── News API         ──► newsapi.org         │
+    └── FanGraphs        ──► fangraphs.com       │
+    └─────────────────────────────────────────────┘
 ```
 
-## 📊 Data Sources & Coverage
+---
 
-### Historical Data (BigQuery)
-- **Years**: 2015-2024
-- **Teams**: Complete team statistics, standings, roster information
-- **Players**: Batting and pitching statistics for all players
-- **Games**: Game results, scores, and metadata
-- **Total Records**: 35,000+ data points
+## 📡 API Reference
 
-### Live Data Sources
-- **MLB API**: Official MLB statistics and real-time data
-- **FanGraphs**: Advanced analytics, Statcast data, and sabermetrics
-- **Baseball Savant**: Statcast pitch-by-pitch data
+### Health
 
-## 🛠️ Technology Stack
+```
+GET /health
+→ { status: "ok", timestamp: "...", version: "..." }
+```
 
-- **Runtime**: Node.js 22 with TypeScript
-- **Framework**: Express.js with CORS support
-- **Cloud Platform**: Google Cloud Platform (App Engine)
-- **Database**: Google BigQuery for historical data
-- **External APIs**: MLB API, FanGraphs, Baseball Savant
-- **Build System**: TypeScript compiler with automated deployment
+### Predictions
 
-## 📡 API Endpoints
+```
+GET /api/predictions?date=2026-04-08
+→ {
+    predictions: [
+      {
+        game_pk, game_date,
+        home_team_name, away_team_name,
+        home_win_probability, away_win_probability,
+        predicted_winner, confidence_tier,
+        model_version, model_accuracy, lineup_confirmed,
+        // V8 signals
+        elo_home, elo_away, elo_differential, elo_home_win_prob,
+        home_pythag_season, away_pythag_season,
+        home_run_diff_10g, away_run_diff_10g,
+        home_current_streak, away_current_streak,
+        h2h_win_pct_3yr, is_divisional,
+        // V7 signals (retained)
+        home_bullpen_era, away_bullpen_era, moon_phase,
+        home_starter_name, home_starter_era, home_starter_hand, ...
+      }
+    ]
+  }
+```
 
-### Legacy Endpoints (Backward Compatible)
+### Stats
 
-| Endpoint | Description | Parameters |
-|----------|-------------|------------|
-| `GET /health` | Service health check | None |
-| `GET /api/teamBatting` | Team batting statistics | `year`, `team` |
-| `GET /api/TeamPitching` | Team pitching statistics | `year`, `team` |
-| `GET /api/PlayerBatting` | Player batting statistics | `year`, `player` |
-| `GET /api/PlayerPitching` | Player pitching statistics | `year`, `player` |
-| `GET /api/Standings` | League standings | `year`, `league` |
+```
+GET /api/teamBatting?year=2025
+GET /api/teamPitching?year=2025
+GET /api/PlayerBatting?year=2025[&limit=500]
+GET /api/PlayerPitching?year=2025[&limit=500]
+GET /api/standings?year=2025
+```
 
-### Advanced Endpoints
+### Player / Team
 
-| Endpoint | Description | Parameters |
-|----------|-------------|------------|
-| `GET /api/playerData` | FanGraphs player data | `playerId`, `position` |
-| `GET /api/statcast` | Statcast pitch data | `year`, `playerId`, `position` |
-| `GET /api/availableStats` | Available statistics | `dataType` |
+```
+GET /api/player/:playerId
+GET /api/team/:teamAbbr
+GET /api/team/:teamAbbr/transactions
+GET /api/transactions?year=2025
+```
 
-### BigQuery Sync Endpoints (Data Management)
+### Statcast
 
-| Endpoint | Description | Parameters |
-|----------|-------------|------------|
-| `GET /api/sync/status` | Check sync status for all tables | None |
-| `POST /api/sync/missing` | Sync all missing historical data | `forceRefresh`, `years`, `tables` |
-| `POST /api/sync/teams/:year` | Sync teams for specific year | `forceRefresh` |
-| `POST /api/sync/team-stats/:year` | Sync team stats for specific year | `forceRefresh` |
-| `POST /api/sync/player-stats/:year` | Sync player stats for specific year | `forceRefresh` |
-| `POST /api/sync/standings/:year` | Sync standings for specific year | `forceRefresh` |
+```
+GET /api/statcast?year=2025&playerId=12345&position=batter&limit=1000
+                 [&p_throws=R|L] [&stands=R|L] [&events=home_run]
+```
 
-📖 **See [BigQuery Sync Quick Start](./BIGQUERY_SYNC_QUICKSTART.md)** for usage examples
+### News
 
-## 🏛️ Project Structure
+```
+GET  /api/mlb-news
+GET  /api/braves-news
+POST /api/news/refresh
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Runtime | Node.js 20, TypeScript 5 |
+| Framework | Express 4 |
+| Database | Google BigQuery (`mlb_2026_season`) |
+| ORM / Query | `@google-cloud/bigquery` client |
+| Hosting | Google Cloud App Engine (`default` service) |
+| Logging | Structured JSON logs (Cloud Logging) |
+| Testing | Jest |
+
+---
+
+## 🚀 Local Development
+
+```bash
+# Install
+npm install
+
+# Environment
+cp .env.example .env
+# Set GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+# Set NEWS_API_KEY, GOOGLE_CLOUD_PROJECT
+
+# Start (ts-node with hot reload)
+npm run dev
+
+# Health check
+curl http://localhost:8080/health
+```
+
+### Build & Deploy
+
+```bash
+npm run build
+gcloud app deploy app.yaml --quiet
+```
+
+### Tests
+
+```bash
+npm test
+```
+
+---
+
+## 📁 Repository Structure
 
 ```
 hanks_tank_backend/
 ├── src/
-│   ├── app.ts                    # Main application entry point
-│   ├── config/                   # Configuration files
-│   ├── controllers/              # Request handlers
-│   │   └── legacy.controller.ts  # Backward compatibility layer
-│   ├── routes/                   # API route definitions
-│   │   ├── legacy.routes.ts      # Legacy endpoint routes
-│   │   └── hybrid-teams.routes.ts
-│   ├── services/                 # Business logic layer
-│   │   ├── data-source.service.ts    # Hybrid data routing
-│   │   ├── fangraphs.service.ts      # FanGraphs API integration
-│   │   ├── mlb-api.service.ts        # MLB API service
-│   │   └── bigquery.service.ts       # BigQuery data access
-│   └── utils/                    # Utility functions
-├── data/                         # Historical data files
-│   ├── teams/                    # Team statistics and info
-│   ├── players/                  # Player statistics
-│   ├── games/                    # Game results
-│   └── standings/                # League standings
-├── scripts/                      # Data collection scripts
-└── deploy/                       # Deployment configuration
+│   ├── app.ts                      # Express setup, middleware, route mounting
+│   ├── routes/
+│   │   ├── predictions.routes.ts   # /api/predictions
+│   │   ├── stats.routes.ts         # /api/teamBatting etc.
+│   │   ├── player.routes.ts        # /api/player/:id
+│   │   ├── statcast.routes.ts      # /api/statcast
+│   │   ├── news.routes.ts          # /api/mlb-news, /api/braves-news
+│   │   └── transactions.routes.ts  # /api/transactions
+│   └── controllers/
+│       ├── predictions.controller.ts
+│       ├── stats.controller.ts
+│       ├── statcast.controller.ts
+│       └── news.controller.ts
+├── data/                           # Local data cache (games, standings, rosters)
+├── scripts/                        # Historical transaction collection
+├── legacy_backup/                  # Previous JS implementation
+├── app.yaml                        # App Engine config
+├── jest.config.js
+└── tsconfig.json
 ```
-
-## 🔧 Development
-
-### Prerequisites
-
-- Node.js 22+
-- TypeScript
-- Google Cloud SDK (for deployment)
-- BigQuery access (for historical data)
-
-### Local Development
-
-```bash
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Start development server
-npm run dev
-
-# Run type checking
-npm run type-check
-```
-
-### Environment Variables
-
-```bash
-# Server Configuration
-NODE_ENV=development
-PORT=3000
-LOG_LEVEL=info
-
-# Google Cloud Platform
-GOOGLE_CLOUD_PROJECT=hankstank
-GCP_PROJECT_ID=hankstank
-GCP_BUCKET_NAME=hanks_tank_data
-BQ_DATASET=mlb_historical_data
-
-# External APIs
-MLB_API_BASE_URL=https://statsapi.mlb.com/api/v1
-FANGRAPHS_BASE_URL=https://www.fangraphs.com/api
-STATCAST_BASE_URL=https://baseballsavant.mlb.com/statcast_search
-```
-
-## 🚢 Deployment
-
-### Google Cloud App Engine
-
-```bash
-# Deploy to production
-npm run deploy
-
-# Deploy with traffic promotion
-npm run deploy:prod
-
-# View logs
-npm run gcp:logs
-
-# Open in browser
-npm run gcp:browse
-```
-
-### Manual Deployment
-
-```bash
-# Build the project
-npm run build
-
-# Deploy using gcloud
-gcloud app deploy --quiet
-
-# Check deployment status
-gcloud app browse
-```
-
-## 📈 Data Collection
-
-The project includes comprehensive data collection scripts for gathering historical MLB data:
-
-### Historical Data Collector
-```bash
-python scripts/historical_data_collector.py
-```
-
-### Player Data Collector
-```bash
-python scripts/comprehensive_player_collector.py
-```
-
-### Incremental Updates
-```bash
-python scripts/incremental_collector.py
-```
-
-## 🔄 Data Flow
-
-```
-Frontend Request → Legacy Routes → Data Source Service → Intelligent Routing
-                                                        ↓
-                                        ┌─── BigQuery (Historical 2015-2024)
-                                        ├─── MLB API (Live/Current)
-                                        └─── FanGraphs (Advanced Analytics)
-                                                        ↓
-                                            Response Cache → JSON Response
-```
-
-## 🎯 Key Features
-
-### Intelligent Data Routing
-- Automatically selects optimal data source based on request parameters
-- Fallback mechanisms for data availability
-- Caching layer for improved performance
-
-### Backward Compatibility
-- All existing frontend endpoints preserved
-- Seamless migration from legacy architecture
-- No breaking changes to client applications
-
-### Scalable Architecture
-- Auto-scaling App Engine deployment
-- Efficient BigQuery integration
-- External API rate limiting and error handling
-
-### Comprehensive Logging
-- Structured logging with Winston
-- Request/response tracking
-- Error monitoring and alerting
-
-## 📊 Performance Metrics
-
-- **Response Time**: < 200ms for cached data
-- **Availability**: 99.9% uptime SLA
-- **Data Freshness**: Real-time for current season, historical for past seasons
-- **Scaling**: 0-10 instances based on traffic
-
-## 🔐 Security
-
-- CORS configuration for web client access
-- Environment-based configuration
-- Secure credential management via GCP
-- API rate limiting and request validation
-
-## 📚 API Documentation
-
-### Response Format
-
-All endpoints return JSON in the following format:
-
-```json
-{
-  "success": true,
-  "data": [...],
-  "metadata": {
-    "source": "bigquery|mlb-api|fangraphs",
-    "timestamp": "2025-08-19T20:00:00Z",
-    "count": 30
-  }
-}
-```
-
-### Error Handling
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "NOT_FOUND",
-    "message": "No data found for the specified parameters"
-  }
-}
-```
-
-## 🛠️ Maintenance
-
-### Monitoring
-- Health check endpoint: `/health`
-- GCP monitoring dashboard
-- Structured logging for debugging
-
-### Updates
-- Rolling deployments with zero downtime
-- Feature flag support for gradual rollouts
-- Automated testing pipeline
-
-## 📝 Changelog
-
-### v2.0.0 (2025-08-19)
-- **MAJOR**: Hybrid data architecture implementation
-- **NEW**: BigQuery historical data integration (35K+ records)
-- **NEW**: FanGraphs API service for advanced analytics
-- **NEW**: Intelligent data source routing
-- **NEW**: GCP App Engine deployment
-- **ENHANCED**: Backward compatibility layer
-- **ENHANCED**: Comprehensive logging and monitoring
-- **ENHANCED**: TypeScript implementation with full type safety
-
-### v1.x.x (Legacy)
-- Original implementation with direct MLB API integration
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the ISC License - see the LICENSE file for details.
-
-## 🏆 Acknowledgments
-
-- MLB for providing comprehensive baseball data
-- FanGraphs for advanced analytics and sabermetrics
-- Google Cloud Platform for scalable infrastructure
-- Baseball Savant for Statcast data
 
 ---
 
-**Live Service**: https://hankstank.uc.r.appspot.com  
-**Maintained by**: Elijah Craig  
-**Last Updated**: August 19, 2025
+## 🌐 Environment Variables
+
+| Variable | Description |
+|---|---|
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID (`hankstank`) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to service account key |
+| `NEWS_API_KEY` | NewsAPI.org API key |
+| `PORT` | Server port (default 8080) |
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](../hanks_tank/LICENSE)
