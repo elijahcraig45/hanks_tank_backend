@@ -10,6 +10,7 @@ import validationRoutes from './routes/validation.routes';
 import transactionsRoutes from './routes/transactions.routes';
 import lineupRoutes from './routes/lineup.routes';
 import predictionsRoutes from './routes/predictions.routes';
+import scoutingReportsRoutes from './routes/scouting-reports.routes';
 import { validateGCPConfig } from './config/gcp.config';
 import { schedulerService } from './services/scheduler.service';
 
@@ -62,6 +63,7 @@ app.use('/api/sync', bigquerySyncRoutes); // BigQuery sync management
 app.use('/api/validation', validationRoutes); // Data validation and scheduled jobs
 app.use('/api/lineup', lineupRoutes); // Lineup scheduling and pre-game task management
 app.use('/api/predictions', predictionsRoutes); // Game predictions and matchup signals
+app.use('/api/scouting-reports', scoutingReportsRoutes); // Pre-computed daily scouting reports
 app.use('/api', legacyRoutes); // Legacy endpoints for backward compatibility
 
 // 404 handler
