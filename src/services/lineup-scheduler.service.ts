@@ -65,7 +65,7 @@ export class LineupSchedulerService {
     );
 
     const taskBody = {
-      mode: 'pregame_v8',
+      mode: 'pregame_v10',
       game_pks: payload.game_pks,
       date: payload.game_date,
     };
