@@ -74,7 +74,7 @@ class PredictionsController {
           p.home_sp_bb_pct, p.away_sp_bb_pct,
           p.home_sp_whiff_pct, p.away_sp_whiff_pct,
           p.home_sp_known, p.away_sp_known,
-          p.sp_composite_diff,
+          p.sp_quality_composite_diff,
           -- V8 Elo + team form signals
           p.elo_differential, p.elo_home_win_prob,
           p.home_pythag_season, p.away_pythag_season, p.pythag_differential,
