@@ -67,6 +67,14 @@ class PredictionsController {
           p.home_starter_venue_era, p.away_starter_venue_era,
           p.starter_venue_era_differential,
           p.venue_woba_differential,
+          -- V10 SP quality percentile ranks (Baseball Savant 0-100)
+          p.home_sp_xera, p.away_sp_xera,
+          p.home_sp_fbv_pct, p.away_sp_fbv_pct,
+          p.home_sp_k_pct, p.away_sp_k_pct,
+          p.home_sp_bb_pct, p.away_sp_bb_pct,
+          p.home_sp_whiff_pct, p.away_sp_whiff_pct,
+          p.home_sp_known, p.away_sp_known,
+          p.sp_composite_diff,
           -- V8 Elo + team form signals
           p.elo_differential, p.elo_home_win_prob,
           p.home_pythag_season, p.away_pythag_season, p.pythag_differential,
