@@ -47,21 +47,48 @@ interface NewsResponse {
   articles: NewsArticle[];
 }
 
+interface CachedNewsEntry {
+  data: NewsResponse;
+  updatedAt: Date | null;
+}
+
+type NewsType = 'mlb' | 'braves';
+
+const DEFAULT_NEWS_CACHE_MAX_AGE_HOURS = parseInt(process.env.NEWS_CACHE_MAX_AGE_HOURS || '6', 10);
+
+export function buildNewsCachePath(newsType: NewsType): string {
+  return `news/${newsType}_latest.json`;
+}
+
+export function isNewsCacheStale(
+  updatedAt: Date | null,
+  maxAgeMs: number,
+  nowMs = Date.now()
+): boolean {
+  if (!updatedAt || Number.isNaN(updatedAt.getTime())) {
+    return true;
+  }
+
+  return nowMs - updatedAt.getTime() > maxAgeMs;
+}
+
 export class NewsService {
   private storage: Storage;
   private bigquery: BigQuery;
   private bucketName: string;
   private apiKey: string;
   private baseUrl: string;
-  private lastFetchTime: { [key: string]: Date } = {};
+  private cacheMaxAgeMs: number;
   private tableReady = false;
+  private inFlightRefreshes = new Map<NewsType, Promise<NewsResponse | null>>();
 
   constructor() {
     this.storage = new Storage();
     this.bigquery = new BigQuery({ projectId: BQ_PROJECT });
     this.bucketName = process.env.GCS_BUCKET_NAME || 'hanks_tank_data';
     this.apiKey = process.env.NEWS_API_KEY || '';
-    this.baseUrl = process.env.NEWS_API_BASE_URL || 'https://newsapi.org/v2';
+    this.baseUrl = process.env.NEWS_API_BASE_URL || process.env.NEWS_API_URL || 'https://newsapi.org/v2';
+    this.cacheMaxAgeMs = DEFAULT_NEWS_CACHE_MAX_AGE_HOURS * 60 * 60 * 1000;
 
     if (!this.apiKey) {
       logger.warn('NEWS_API_KEY not provided - news functionality will be disabled');
@@ -147,16 +174,39 @@ export class NewsService {
     }
   }
 
-  /**
-   * Check if we should fetch news (rate limiting protection)
-   */
-  private shouldFetchNews(newsType: string): boolean {
-    const lastFetch = this.lastFetchTime[newsType];
-    if (!lastFetch) return true;
+  private async requestNews(params: URLSearchParams): Promise<NewsResponse> {
+    const url = `${this.baseUrl}/everything?${params.toString()}`;
+    const newsResponse = await fetch(url, {
+      headers: {
+        'X-API-Key': this.apiKey,
+      },
+      signal: AbortSignal.timeout(10000),
+    });
 
-    // Only allow fetching every 4 hours minimum
-    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
-    return lastFetch < fourHoursAgo;
+    if (!newsResponse.ok) {
+      throw new Error(`News API error: ${newsResponse.status} ${newsResponse.statusText}`);
+    }
+
+    return newsResponse.json() as Promise<NewsResponse>;
+  }
+
+  private async refreshNewsType(newsType: NewsType): Promise<NewsResponse | null> {
+    if (this.inFlightRefreshes.has(newsType)) {
+      return this.inFlightRefreshes.get(newsType)!;
+    }
+
+    const refreshPromise = (async () => {
+      if (newsType === 'mlb') {
+        return this.fetchMLBNews();
+      }
+
+      return this.fetchBravesNews();
+    })().finally(() => {
+      this.inFlightRefreshes.delete(newsType);
+    });
+
+    this.inFlightRefreshes.set(newsType, refreshPromise);
+    return refreshPromise;
   }
 
   /**
@@ -168,21 +218,7 @@ export class NewsService {
       return null;
     }
 
-    if (!this.shouldFetchNews('mlb')) {
-      logger.info('Skipping MLB news fetch - too recent');
-      return await this.getCachedNews('mlb');
-    }
-
     try {
-      const response = await fetch(`${this.baseUrl}/everything`, {
-        method: 'GET',
-        headers: {
-          'X-API-Key': this.apiKey,
-        },
-        body: null,
-        signal: AbortSignal.timeout(10000), // 10 second timeout
-      });
-
       const params = new URLSearchParams({
         q: 'MLB',
         sortBy: 'publishedAt',
@@ -190,24 +226,12 @@ export class NewsService {
         pageSize: '20',
       });
 
-      const url = `${this.baseUrl}/everything?${params}`;
-      const newsResponse = await fetch(url, {
-        headers: {
-          'X-API-Key': this.apiKey,
-        },
-      });
-
-      if (!newsResponse.ok) {
-        throw new Error(`News API error: ${newsResponse.status} ${newsResponse.statusText}`);
-      }
-
-      const data = await newsResponse.json() as NewsResponse;
+      const data = await this.requestNews(params);
       
       // Store in Cloud Storage (latest cache for frontend)
       await this.storeNewsData('mlb', data);
       // Archive all articles to BigQuery historical store
       await this._archiveToBigQuery('mlb', data.articles);
-      this.lastFetchTime['mlb'] = new Date();
 
       logger.info('MLB news fetched and stored successfully', { 
         articles: data.articles.length,
@@ -219,9 +243,7 @@ export class NewsService {
       logger.error('Error fetching MLB news', {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
-      
-      // Return cached data if available
-      return await this.getCachedNews('mlb');
+      return null;
     }
   }
 
@@ -234,11 +256,6 @@ export class NewsService {
       return null;
     }
 
-    if (!this.shouldFetchNews('braves')) {
-      logger.info('Skipping Braves news fetch - too recent');
-      return await this.getCachedNews('braves');
-    }
-
     try {
       const params = new URLSearchParams({
         q: 'Atlanta Braves',
@@ -247,24 +264,12 @@ export class NewsService {
         pageSize: '15',
       });
 
-      const url = `${this.baseUrl}/everything?${params}`;
-      const newsResponse = await fetch(url, {
-        headers: {
-          'X-API-Key': this.apiKey,
-        },
-      });
-
-      if (!newsResponse.ok) {
-        throw new Error(`News API error: ${newsResponse.status} ${newsResponse.statusText}`);
-      }
-
-      const data = await newsResponse.json() as NewsResponse;
+      const data = await this.requestNews(params);
       
       // Store in Cloud Storage (latest cache for frontend)
       await this.storeNewsData('braves', data);
       // Archive all articles to BigQuery historical store
       await this._archiveToBigQuery('braves', data.articles);
-      this.lastFetchTime['braves'] = new Date();
 
       logger.info('Braves news fetched and stored successfully', { 
         articles: data.articles.length,
@@ -276,9 +281,7 @@ export class NewsService {
       logger.error('Error fetching Braves news', {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
-      
-      // Return cached data if available
-      return await this.getCachedNews('braves');
+      return null;
     }
   }
 
@@ -288,7 +291,7 @@ export class NewsService {
   private async storeNewsData(newsType: string, data: NewsResponse): Promise<void> {
     try {
       const bucket = this.storage.bucket(this.bucketName);
-      const fileName = `2024/${newsType}_news.json`;
+      const fileName = buildNewsCachePath(newsType as NewsType);
       const file = bucket.file(fileName);
 
       await file.save(JSON.stringify(data, null, 2), {
@@ -316,9 +319,14 @@ export class NewsService {
    * Get cached news data from Cloud Storage
    */
   async getCachedNews(newsType: string): Promise<NewsResponse | null> {
+    const cachedEntry = await this.getCachedNewsEntry(newsType as NewsType);
+    return cachedEntry?.data ?? null;
+  }
+
+  private async getCachedNewsEntry(newsType: NewsType): Promise<CachedNewsEntry | null> {
     try {
       const bucket = this.storage.bucket(this.bucketName);
-      const fileName = `2024/${newsType}_news.json`;
+      const fileName = buildNewsCachePath(newsType);
       const file = bucket.file(fileName);
 
       const [exists] = await file.exists();
@@ -327,14 +335,20 @@ export class NewsService {
         return null;
       }
 
-      const [content] = await file.download();
+      const [content, metadata] = await Promise.all([
+        file.download().then(([downloadedContent]) => downloadedContent),
+        file.getMetadata().then(([fileMetadata]) => fileMetadata),
+      ]);
       const data: NewsResponse = JSON.parse(content.toString());
+      const updatedAtValue = metadata.updated || metadata.timeCreated || null;
+      const updatedAt = updatedAtValue ? new Date(updatedAtValue) : null;
 
       logger.info(`Cached news data retrieved for ${newsType}`, { 
-        articles: data.articles.length 
+        articles: data.articles.length,
+        updatedAt: updatedAt?.toISOString() || null,
       });
 
-      return data;
+      return { data, updatedAt };
     } catch (error) {
       logger.error('Error retrieving cached news data', {
         newsType,
@@ -353,8 +367,8 @@ export class NewsService {
     try {
       // Fetch both news types
       await Promise.allSettled([
-        this.fetchMLBNews(),
-        this.fetchBravesNews(),
+        this.refreshNewsType('mlb'),
+        this.refreshNewsType('braves'),
       ]);
       
       logger.info('Scheduled news fetch completed');
@@ -368,20 +382,15 @@ export class NewsService {
   /**
    * Get fresh or cached news data
    */
-  async getNews(newsType: 'mlb' | 'braves'): Promise<NewsResponse | null> {
-    // First try to get cached data
-    let data = await this.getCachedNews(newsType);
-    
-    // If no cached data or data is old, try to fetch fresh
-    if (!data) {
-      if (newsType === 'mlb') {
-        data = await this.fetchMLBNews();
-      } else {
-        data = await this.fetchBravesNews();
-      }
+  async getNews(newsType: NewsType): Promise<NewsResponse | null> {
+    const cachedEntry = await this.getCachedNewsEntry(newsType);
+
+    if (cachedEntry && !isNewsCacheStale(cachedEntry.updatedAt, this.cacheMaxAgeMs)) {
+      return cachedEntry.data;
     }
 
-    return data;
+    const freshData = await this.refreshNewsType(newsType);
+    return freshData || cachedEntry?.data || null;
   }
 }
 
