@@ -28,18 +28,36 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Force public npm registry
+        run: |
+          cat <<'EOF' > "$RUNNER_TEMP/.npmrc"
+          registry=https://registry.npmjs.org/
+          EOF
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/.npmrc
       
       - name: Install dependencies
         run: npm ci
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/.npmrc
+          NODE_AUTH_TOKEN: ''
       
       - name: Run linter
-        run: npm run lint --if-present || echo "No lint script found"
+        run: npm run lint --if-present
       
       - name: Run tests
-        run: npm test --if-present || echo "No test script found"
+        run: npm test --if-present
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/.npmrc
+          NODE_AUTH_TOKEN: ''
       
       - name: Build TypeScript
         run: npm run build
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/.npmrc
+          NODE_AUTH_TOKEN: ''
 
   deploy:
     name: Deploy to Google Cloud
@@ -56,12 +74,27 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Force public npm registry
+        run: |
+          cat <<'EOF' > "$RUNNER_TEMP/.npmrc"
+          registry=https://registry.npmjs.org/
+          EOF
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/.npmrc
       
       - name: Install dependencies
         run: npm ci
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/.npmrc
+          NODE_AUTH_TOKEN: ''
       
       - name: Build TypeScript
         run: npm run build
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/.npmrc
+          NODE_AUTH_TOKEN: ''
       
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
