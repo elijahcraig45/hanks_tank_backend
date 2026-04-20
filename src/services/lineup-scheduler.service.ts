@@ -125,54 +125,80 @@ export class LineupSchedulerService {
    * schedules an immediate task instead (line-ups may still be available).
    */
   async scheduleAllGamesForDate(games: GameScheduleItem[]): Promise<{
-    scheduled: number;
-    skipped: number;
-    tasks: Array<{ game_pk: number; trigger_time: string; delay_seconds: number }>;
-  }> {
-    const now = Date.now();
-    const scheduled: Array<{ game_pk: number; trigger_time: string; delay_seconds: number }> = [];
-    let skipped = 0;
+     scheduled: number;
+     skipped: number;
+     tasks: Array<{ game_pk: number; trigger_time: string; delay_seconds: number; phase: string }>;
+   }> {
+     const now = Date.now();
+     const scheduled: Array<{ game_pk: number; trigger_time: string; delay_seconds: number; phase: string }> = [];
+     let skipped = 0;
 
-    for (const game of games) {
-      let gameTimeMs: number;
+     for (const game of games) {
+       let gameTimeMs: number;
       try {
         gameTimeMs = new Date(game.game_time_utc).getTime();
       } catch {
         logger.warn('Invalid game_time_utc for game', { game_pk: game.game_pk });
-        skipped++;
-        continue;
-      }
+         skipped++;
+         continue;
+       }
 
-      const triggerMs = gameTimeMs - this.PREGAME_MINUTES_BEFORE * 60 * 1000;
-      const delayMs = triggerMs - now;
+       if (gameTimeMs <= now) {
+         logger.info('Skipping game %d — first pitch has already passed', game.game_pk);
+         skipped++;
+         continue;
+       }
 
-      let delaySeconds: number;
-      if (delayMs >= 0) {
-        // Normal case: task fires in the future
-        delaySeconds = Math.floor(delayMs / 1000);
-      } else if (delayMs >= -30 * 60 * 1000) {
-        // Up to 30 min late — run immediately
-        delaySeconds = 0;
-        logger.info('Game %d trigger window slightly passed — scheduling immediately', game.game_pk);
-      } else {
-        // More than 30 min past the window — skip
-        logger.info('Skipping game %d — pre-game window has passed', game.game_pk);
-        skipped++;
-        continue;
-      }
+       const triggerMs = gameTimeMs - this.PREGAME_MINUTES_BEFORE * 60 * 1000;
+       const delayMs = triggerMs - now;
 
-      const triggerTime = new Date(now + delaySeconds * 1000).toISOString();
+       try {
+         if (delayMs >= 0) {
+           await this.schedulePregameTask({
+             game_pks: [game.game_pk],
+             game_date: game.game_date,
+             delay_seconds: 0,
+           });
+           scheduled.push({
+             game_pk: game.game_pk,
+             trigger_time: new Date(now).toISOString(),
+             delay_seconds: 0,
+             phase: 'baseline',
+           });
 
-      try {
-        await this.schedulePregameTask({
-          game_pks: [game.game_pk],
-          game_date: game.game_date,
-          delay_seconds: delaySeconds,
-        });
-        scheduled.push({ game_pk: game.game_pk, trigger_time: triggerTime, delay_seconds: delaySeconds });
-      } catch (err) {
-        logger.error('Failed to schedule task for game', {
-          game_pk: game.game_pk,
+           const delaySeconds = Math.floor(delayMs / 1000);
+           await this.schedulePregameTask({
+             game_pks: [game.game_pk],
+             game_date: game.game_date,
+             delay_seconds: delaySeconds,
+           });
+           scheduled.push({
+             game_pk: game.game_pk,
+             trigger_time: new Date(now + delaySeconds * 1000).toISOString(),
+             delay_seconds: delaySeconds,
+             phase: 'confirmed-refresh',
+           });
+         } else if (delayMs >= -30 * 60 * 1000) {
+           logger.info('Game %d trigger window slightly passed — scheduling immediate refresh', game.game_pk);
+           await this.schedulePregameTask({
+             game_pks: [game.game_pk],
+             game_date: game.game_date,
+             delay_seconds: 0,
+           });
+           scheduled.push({
+             game_pk: game.game_pk,
+             trigger_time: new Date(now).toISOString(),
+             delay_seconds: 0,
+             phase: 'confirmed-refresh',
+           });
+         } else {
+           logger.info('Skipping game %d — pre-game window has passed', game.game_pk);
+           skipped++;
+           continue;
+         }
+       } catch (err) {
+         logger.error('Failed to schedule task for game', {
+           game_pk: game.game_pk,
           error: err instanceof Error ? err.message : String(err),
         });
         skipped++;
