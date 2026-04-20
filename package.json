@@ -1,7 +1,7 @@
 {
   "name": "hanks-tank-backend",
   "version": "2.0.0",
-  "description": "MLB Analytics Backend API using MLB StatsAPI",
+  "description": "Backend API for the Hank's Tank MLB analytics platform.",
   "main": "dist/app.js",
   "scripts": {
     "start": "node dist/app.js",
@@ -10,31 +10,31 @@
     "gcp-build": "npx tsc",
     "build:watch": "npx tsc --watch",
     "serve": "npm run build && npm start",
-    "clean": "rm -rf dist",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true });\"",
     "type-check": "npx tsc --noEmit",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch --runInBand",
     "test:coverage": "jest --coverage",
     "deploy": "npm run build && gcloud app deploy --quiet --project=hankstank",
     "deploy:prod": "npm run build && gcloud app deploy --promote --quiet --project=hankstank",
     "gcp:logs": "gcloud app logs tail -s default --project=hankstank",
     "gcp:browse": "gcloud app browse --project=hankstank",
     "gcp:versions": "gcloud app versions list --project=hankstank",
-    "transactions:setup": "bash scripts/setup_transactions.sh",
+    "transactions:setup": "node scripts/setup-transactions.js",
     "transactions:collect": "node scripts/collect_historical_transactions.js",
     "transactions:collect:year": "node scripts/collect_historical_transactions.js --years"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/elijahcraig45/mlb_pi.git"
+    "url": "git+https://github.com/elijahcraig45/hanks_tank_backend.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Elijah Craig",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/elijahcraig45/mlb_pi/issues"
+    "url": "https://github.com/elijahcraig45/hanks_tank_backend/issues"
   },
-  "homepage": "https://github.com/elijahcraig45/mlb_pi#readme",
+  "homepage": "https://github.com/elijahcraig45/hanks_tank_backend#readme",
   "dependencies": {
     "@google-cloud/bigquery": "^7.9.4",
     "@google-cloud/storage": "^7.17.0",

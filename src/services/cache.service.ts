@@ -20,9 +20,12 @@ class CacheService implements CacheServiceInterface {
     logger.info('Cache service initialized with memory-only storage (Redis disabled)');
     
     // Clean up expired entries every 5 minutes
-    setInterval(() => {
-      this.cleanupFallbackCache();
-    }, 5 * 60 * 1000);
+    if (process.env.NODE_ENV !== 'test') {
+      const interval = setInterval(() => {
+        this.cleanupFallbackCache();
+      }, 5 * 60 * 1000);
+      interval.unref?.();
+    }
   }
 
   private cleanupFallbackCache(): void {
