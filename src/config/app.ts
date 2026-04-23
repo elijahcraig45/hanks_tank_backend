@@ -67,7 +67,28 @@ export const config = {
   
   // CORS configuration
   cors: {
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000', 'http://localhost:3001'],
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Always allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const allowedOrigins = [
+        'https://hankstank.com',
+        'https://www.hankstank.com',
+        // App Engine service URL kept as fallback during deploys
+        'https://frontend-dot-hankstank.uc.r.appspot.com',
+        // Development origins
+        ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()) : []),
+        'http://localhost:3000',
+        'http://localhost:3001',
+      ];
+
+      const uniqueOrigins = [...new Set(allowedOrigins)];
+      if (uniqueOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin '${origin}' not allowed`));
+      }
+    },
     credentials: true,
   },
   
