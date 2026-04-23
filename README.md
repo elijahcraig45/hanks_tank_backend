@@ -1,6 +1,7 @@
 # Hank's Tank Backend
 
-> **Production API:** https://hankstank.uc.r.appspot.com  
+> **Production API:** https://hankstank.com/api  
+> **Legacy App Engine URL:** https://hankstank.uc.r.appspot.com  
 > **Companion repos:** [hanks_tank](../hanks_tank) · [hanks_tank_ml](../hanks_tank_ml)
 
 This repo is the TypeScript/Express backend for Hank's Tank, an MLB analytics platform that combines historical warehouse queries, live MLB data, scheduled prediction outputs, and precomputed scouting reports behind a single API.
@@ -48,7 +49,7 @@ React SPA / browser clients
 
 | Resource | Notes |
 |---|---|
-| Hosting | Google Cloud App Engine `default` service |
+| Hosting | Google Cloud App Engine `default` service, primarily reached through `https://hankstank.com/api/*` dispatch routing |
 | Warehouse | BigQuery datasets for current-season and historical MLB data |
 | ML integration | Reads `game_predictions`, `game_scouting_reports`, and feature-derived fields produced by `hanks_tank_ml` |
 | Scheduler integration | Supports pregame orchestration via `/api/lineup/schedule-today` and Cloud Tasks |
@@ -58,7 +59,7 @@ React SPA / browser clients
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js 20 |
+| Runtime | Node.js 22 |
 | Language | TypeScript 5 |
 | Framework | Express 4 |
 | Data access | `@google-cloud/bigquery`, `@google-cloud/tasks`, `axios` |
@@ -93,6 +94,12 @@ React SPA / browser clients
 | `npm test` | Run Jest tests |
 | `npm run build` | Compile to `dist/` |
 | `npm run deploy` | Build and deploy to App Engine |
+| `npm run deploy:prod` | Build and deploy to App Engine with `--promote` |
+
+## Production routing
+
+- `https://hankstank.com/api/*` and `https://www.hankstank.com/api/*` are dispatched to the backend App Engine `default` service.
+- The App Engine hostname remains available as a direct fallback during deploys and routing changes.
 
 ## Repository structure
 
