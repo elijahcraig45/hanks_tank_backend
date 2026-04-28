@@ -245,11 +245,11 @@ class MLBApiService {
     );
   }
 
-  async getTeamById(teamId: number, season?: number): Promise<{ teams: MLBTeam[] }> {
-    const cacheKey = CacheKeys.teams.byId(teamId, season);
+  async getTeamById(teamId: number, season?: number, hydrate?: string): Promise<{ teams: MLBTeam[] }> {
+    const cacheKey = `${CacheKeys.teams.byId(teamId, season)}:${hydrate || 'default'}`;
     return this.getCachedOrFetch(
       cacheKey,
-      () => this.makeRequest<{ teams: MLBTeam[] }>(`/teams/${teamId}`, { season }),
+      () => this.makeRequest<{ teams: MLBTeam[] }>(`/teams/${teamId}`, { season, hydrate }),
       config.cache.ttl.teams
     );
   }
@@ -304,12 +304,44 @@ class MLBApiService {
     );
   }
 
-  // Players endpoints
-  async getPlayerById(playerId: number, season?: number): Promise<{ people: MLBPlayer[] }> {
-    const cacheKey = CacheKeys.players.byId(playerId, season);
+  async getTeamSeasonStats(teamId: number, season?: number, group: string = 'hitting'): Promise<any> {
+    const cacheKey = CacheKeys.stats('team-season', { teamId, season, group });
     return this.getCachedOrFetch(
       cacheKey,
-      () => this.makeRequest<{ people: MLBPlayer[] }>(`/people/${playerId}`, { season }),
+      () => this.makeRequest(`/teams/${teamId}/stats`, {
+        stats: 'season',
+        group,
+        season: season || gcpConfig.dataSource.currentSeason,
+      }),
+      config.cache.ttl.stats
+    );
+  }
+
+  async getTeamStatSplits(
+    teamId: number,
+    season?: number,
+    group: string = 'hitting',
+    sitCodes: string[] = []
+  ): Promise<any> {
+    const cacheKey = CacheKeys.stats('team-splits', { teamId, season, group, sitCodes: sitCodes.join(',') });
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest(`/teams/${teamId}/stats`, {
+        stats: 'statSplits',
+        group,
+        season: season || gcpConfig.dataSource.currentSeason,
+        sitCodes: sitCodes.join(','),
+      }),
+      config.cache.ttl.stats
+    );
+  }
+
+  // Players endpoints
+  async getPlayerById(playerId: number, season?: number, hydrate?: string): Promise<{ people: MLBPlayer[] }> {
+    const cacheKey = `${CacheKeys.players.byId(playerId, season)}:${hydrate || 'default'}`;
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest<{ people: MLBPlayer[] }>(`/people/${playerId}`, { season, hydrate }),
       config.cache.ttl.players
     );
   }
@@ -319,6 +351,51 @@ class MLBApiService {
     return this.getCachedOrFetch(
       cacheKey,
       () => this.makeRequest(`/people/${playerId}/stats`, { season, group }),
+      config.cache.ttl.stats
+    );
+  }
+
+  async getPlayerGameLog(playerId: number, season?: number, group: string = 'hitting'): Promise<any> {
+    const cacheKey = `${CacheKeys.players.stats(playerId, season, `game-log:${group}`)}`;
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest(`/people/${playerId}/stats`, {
+        stats: 'gameLog',
+        season,
+        group,
+      }),
+      config.cache.ttl.games
+    );
+  }
+
+  async getPlayerSeasonStats(playerId: number, season?: number, group: string = 'hitting'): Promise<any> {
+    const cacheKey = CacheKeys.stats('player-season', { playerId, season, group });
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest(`/people/${playerId}/stats`, {
+        stats: 'season',
+        season: season || gcpConfig.dataSource.currentSeason,
+        group,
+      }),
+      config.cache.ttl.stats
+    );
+  }
+
+  async getPlayerStatSplits(
+    playerId: number,
+    season?: number,
+    group: string = 'hitting',
+    sitCodes: string[] = []
+  ): Promise<any> {
+    const cacheKey = CacheKeys.stats('player-splits', { playerId, season, group, sitCodes: sitCodes.join(',') });
+    return this.getCachedOrFetch(
+      cacheKey,
+      () => this.makeRequest(`/people/${playerId}/stats`, {
+        stats: 'statSplits',
+        season: season || gcpConfig.dataSource.currentSeason,
+        group,
+        sitCodes: sitCodes.join(','),
+      }),
       config.cache.ttl.stats
     );
   }
@@ -404,14 +481,43 @@ class MLBApiService {
     teamId?: number,
     sportId?: number
   ): Promise<{ dates: any[] }> {
+    return this.getScheduleWithOptions({
+      startDate,
+      endDate,
+      teamId,
+      sportId,
+    });
+  }
+
+  async getScheduleWithOptions(options: {
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    season?: number;
+    teamId?: number;
+    sportId?: number;
+    hydrate?: string;
+  }): Promise<{ dates: any[] }> {
+    const {
+      date,
+      startDate,
+      endDate,
+      season,
+      teamId,
+      sportId,
+      hydrate,
+    } = options;
     const cacheKey = CacheKeys.schedule.byDateRange(startDate, endDate, teamId);
     return this.getCachedOrFetch(
-      cacheKey,
+      `${cacheKey}:${date || ''}:${season || ''}:${hydrate || ''}`,
       () => this.makeRequest<{ dates: any[] }>('/schedule', {
+        date,
         startDate,
         endDate,
+        season,
         teamId,
         sportId: sportId || 1, // MLB is sport ID 1
+        hydrate,
       }),
       config.cache.ttl.schedule
     );

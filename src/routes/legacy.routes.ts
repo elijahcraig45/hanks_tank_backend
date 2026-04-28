@@ -36,9 +36,16 @@ router.get('/PlayerPitching/avaliableStats', legacyController.getAvailableStats.
 // League Data
 router.get('/Standings', legacyController.getStandings.bind(legacyController));
 
+// Live game surfaces
+router.get('/games', legacyController.getGames.bind(legacyController));
+router.get('/games/:gamePk', legacyController.getGameDetails.bind(legacyController));
+
 // FanGraphs Integration
 router.get('/playerData', legacyController.getPlayerData.bind(legacyController));
 router.get('/statcast', legacyController.getStatcast.bind(legacyController));
+router.get('/splits', legacyController.getSplits.bind(legacyController));
+router.get('/players/:playerId/profile', legacyController.getPlayerProfile.bind(legacyController));
+router.get('/players/:playerId/game-log', legacyController.getPlayerGameLog.bind(legacyController));
 
 // Team Data (aggregated)
 router.get('/teamData', legacyController.getTeamData.bind(legacyController));

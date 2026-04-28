@@ -71,6 +71,11 @@ export const config = {
       // Always allow requests with no origin (mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
 
+      const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+      if (localhostPattern.test(origin)) {
+        return callback(null, true);
+      }
+
       const allowedOrigins = [
         'https://hankstank.com',
         'https://www.hankstank.com',
@@ -78,8 +83,6 @@ export const config = {
         'https://frontend-dot-hankstank.uc.r.appspot.com',
         // Development origins
         ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()) : []),
-        'http://localhost:3000',
-        'http://localhost:3001',
       ];
 
       const uniqueOrigins = [...new Set(allowedOrigins)];

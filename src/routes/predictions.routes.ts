@@ -10,6 +10,9 @@ const router = Router();
 // GET /api/predictions?date=YYYY-MM-DD
 router.get('/', predictionsController.getPredictions.bind(predictionsController));
 
+// GET /api/predictions/diagnostics?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+router.get('/diagnostics', predictionsController.getPredictionDiagnostics.bind(predictionsController));
+
 // GET /api/predictions/:gamePk
 router.get('/:gamePk', predictionsController.getPredictionByGame.bind(predictionsController));
 

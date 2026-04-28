@@ -45,8 +45,8 @@ coverage/
 ehthumbs.db
 Thumbs.db
 
-# Ignore package-lock.json to reduce size
-package-lock.json
+# Ignore installed dependencies; keep lockfile so Cloud Build matches local resolution
+node_modules/
 
 # Ignore data directories (not needed for production - BigQuery is the source)
 data/

@@ -6,7 +6,23 @@
 import { Request, Response } from 'express';
 import { dataSourceService } from '../services/data-source.service';
 import { newsService } from '../services/news.service';
+import { mlbApi } from '../services/mlb-api.service';
 import { logger } from '../utils/logger';
+
+const SPLIT_FAMILY_MAP: Record<string, { label: string; sitCodes: string[] }> = {
+  location: { label: 'Home / Away', sitCodes: ['h', 'a'] },
+  handedness: { label: 'Handedness', sitCodes: ['vr', 'vl'] },
+  time: { label: 'Day / Night', sitCodes: ['d', 'n'] },
+};
+
+function getSingleValue(value: unknown, fallback = ''): string {
+  if (Array.isArray(value)) {
+    const firstValue = value[0];
+    return typeof firstValue === 'string' ? firstValue : fallback;
+  }
+
+  return typeof value === 'string' ? value : fallback;
+}
 
 export class LegacyController {
 
@@ -243,10 +259,11 @@ export class LegacyController {
         playerId,
         p_throws = '',
         stands = '',
-        events = ''
+        events = '',
+        limit = '1500'
       } = req.query;
 
-      logger.info('Statcast request', { year, position, playerId, p_throws, stands, events });
+      logger.info('Statcast request', { year, position, playerId, p_throws, stands, events, limit });
 
       const data = await dataSourceService.getData({
         dataType: 'statcast',
@@ -255,7 +272,8 @@ export class LegacyController {
         playerId: playerId ? parseInt(playerId as string) : undefined,
         p_throws: p_throws as string,
         stands: stands as string,
-        events: events as string
+        events: events as string,
+        limit: limit as string
       });
 
       res.json(data);
@@ -264,6 +282,187 @@ export class LegacyController {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       res.status(500).json({ error: 'Failed to fetch Statcast data' });
+    }
+  }
+
+  /**
+   * GET /api/games
+   * Same-origin schedule endpoint for frontend live surfaces
+   */
+  async getGames(req: Request, res: Response): Promise<void> {
+    try {
+      const { date, startDate, endDate, teamId } = req.query;
+      const scheduleDate = (date as string) || new Date().toISOString().split('T')[0];
+
+      logger.info('Games request', { date: scheduleDate, startDate, endDate, teamId });
+
+      const data = await mlbApi.getScheduleWithOptions({
+        date: startDate || endDate ? undefined : scheduleDate,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        teamId: teamId ? parseInt(teamId as string, 10) : undefined,
+        sportId: 1,
+      });
+
+      res.json(data);
+    } catch (error) {
+      logger.error('Error fetching games schedule', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      res.status(500).json({ error: 'Failed to fetch games schedule' });
+    }
+  }
+
+  /**
+   * GET /api/games/:gamePk
+   * Same-origin game detail endpoint for live game surfaces
+   */
+  async getGameDetails(req: Request, res: Response): Promise<void> {
+    try {
+      const gamePk = parseInt(getSingleValue(req.params.gamePk), 10);
+
+      logger.info('Game details request', { gamePk });
+
+      const data = await mlbApi.getGameById(gamePk);
+      res.json(data);
+    } catch (error) {
+      logger.error('Error fetching game details', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        gamePk: req.params.gamePk
+      });
+      res.status(500).json({ error: 'Failed to fetch game details' });
+    }
+  }
+
+  /**
+   * GET /api/players/:playerId/profile
+   * Same-origin player profile endpoint for the player hub
+   */
+  async getPlayerProfile(req: Request, res: Response): Promise<void> {
+    try {
+      const playerId = parseInt(getSingleValue(req.params.playerId), 10);
+      const season = getSingleValue(req.query.season);
+      const hydrate = getSingleValue(req.query.hydrate, 'currentTeam');
+
+      logger.info('Player profile request', { playerId, season, hydrate });
+
+      const data = await mlbApi.getPlayerById(
+        playerId,
+        season ? parseInt(season, 10) : undefined,
+        hydrate
+      );
+
+      res.json(data);
+    } catch (error) {
+      logger.error('Error fetching player profile', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        playerId: req.params.playerId
+      });
+      res.status(500).json({ error: 'Failed to fetch player profile' });
+    }
+  }
+
+  /**
+   * GET /api/players/:playerId/game-log
+   * Same-origin player game log endpoint for recent performance context
+   */
+  async getPlayerGameLog(req: Request, res: Response): Promise<void> {
+    try {
+      const playerId = parseInt(getSingleValue(req.params.playerId), 10);
+      const season = getSingleValue(req.query.season, '2026');
+      const group = getSingleValue(req.query.group, 'hitting');
+
+      logger.info('Player game log request', { playerId, season, group });
+
+      const data = await mlbApi.getPlayerGameLog(
+        playerId,
+        parseInt(season, 10),
+        group
+      );
+
+      res.json(data);
+    } catch (error) {
+      logger.error('Error fetching player game log', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        playerId: req.params.playerId
+      });
+      res.status(500).json({ error: 'Failed to fetch player game log' });
+    }
+  }
+
+  /**
+   * GET /api/splits
+   * Same-origin split explorer endpoint for player/team context.
+   */
+  async getSplits(req: Request, res: Response): Promise<void> {
+    try {
+      const {
+        entityType = 'player',
+        entityId,
+        season = '2026',
+        group = 'hitting',
+        family = 'location',
+      } = req.query;
+
+      const parsedEntityId = parseInt(entityId as string, 10);
+      if (Number.isNaN(parsedEntityId)) {
+        res.status(400).json({ error: 'entityId is required and must be numeric' });
+        return;
+      }
+
+      const splitFamily = SPLIT_FAMILY_MAP[String(family)] || SPLIT_FAMILY_MAP.location;
+      const parsedSeason = parseInt(season as string, 10);
+      const normalizedEntityType = String(entityType) === 'team' ? 'team' : 'player';
+      const normalizedGroup = String(group) === 'pitching' ? 'pitching' : 'hitting';
+
+      logger.info('Split explorer request', {
+        entityType: normalizedEntityType,
+        entityId: parsedEntityId,
+        season: parsedSeason,
+        group: normalizedGroup,
+        family: splitFamily.label,
+      });
+
+      const [baselineData, splitData] = await Promise.all(
+        normalizedEntityType === 'team'
+          ? [
+              mlbApi.getTeamSeasonStats(parsedEntityId, parsedSeason, normalizedGroup),
+              mlbApi.getTeamStatSplits(parsedEntityId, parsedSeason, normalizedGroup, splitFamily.sitCodes),
+            ]
+          : [
+              mlbApi.getPlayerSeasonStats(parsedEntityId, parsedSeason, normalizedGroup),
+              mlbApi.getPlayerStatSplits(parsedEntityId, parsedSeason, normalizedGroup, splitFamily.sitCodes),
+            ]
+      );
+
+      const baselineSplit = baselineData?.stats?.[0]?.splits?.[0] || null;
+      const splitRows = splitData?.stats?.[0]?.splits || [];
+      const entity =
+        normalizedEntityType === 'team'
+          ? baselineSplit?.team || splitRows[0]?.team || null
+          : baselineSplit?.player || splitRows[0]?.player || null;
+      const team = baselineSplit?.team || splitRows[0]?.team || null;
+
+      res.json({
+        success: true,
+        entityType: normalizedEntityType,
+        group: normalizedGroup,
+        season: parsedSeason,
+        family: {
+          id: String(family),
+          label: splitFamily.label,
+          sitCodes: splitFamily.sitCodes,
+        },
+        entity,
+        team,
+        baseline: baselineSplit,
+        splits: splitRows,
+      });
+    } catch (error) {
+      logger.error('Error fetching split explorer data', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      res.status(500).json({ error: 'Failed to fetch split explorer data' });
     }
   }
 
