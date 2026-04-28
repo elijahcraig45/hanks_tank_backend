@@ -5,12 +5,50 @@
 
 import { Request, Response } from 'express';
 import { BigQuery } from '@google-cloud/bigquery';
+import { mlbApi } from '../services/mlb-api.service';
 import { logger } from '../utils/logger';
 
 const bigquery = new BigQuery({ projectId: 'hankstank' });
 
 const PROJECT = 'hankstank';
 const SEASON_DS = 'mlb_2026_season';
+const MAX_DIAGNOSTIC_DAYS = 180;
+
+function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function formatIsoDate(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+function addDays(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatIsoDate(date);
+}
+
+function dateDiffInDays(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T12:00:00Z`).getTime();
+  const end = new Date(`${endDate}T12:00:00Z`).getTime();
+  return Math.round((end - start) / (24 * 60 * 60 * 1000));
+}
+
+function clampProbability(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0.5;
+  }
+
+  return Math.min(0.999999, Math.max(0.000001, value));
+}
+
+function isCompletedGame(game: any): boolean {
+  return (
+    game?.status?.abstractGameState === 'Final' ||
+    game?.status?.detailedState === 'Final' ||
+    ['F', 'O', 'R'].includes(game?.status?.statusCode)
+  );
+}
 
 class PredictionsController {
   /**
@@ -190,6 +228,167 @@ class PredictionsController {
     } catch (error: any) {
       logger.error('Failed to fetch game prediction', { error: error.message, gamePk: req.params.gamePk });
       res.status(500).json({ success: false, error: { code: 'PREDICTIONS_ERROR', message: error.message } });
+    }
+  }
+
+  /**
+   * GET /api/predictions/diagnostics?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+   * Returns finalized predictions joined with actual outcomes over a date range.
+   */
+  async getPredictionDiagnostics(req: Request, res: Response): Promise<void> {
+    try {
+      const today = formatIsoDate(new Date());
+      const endDate = String(req.query.endDate || today);
+      const startDate = String(req.query.startDate || addDays(endDate, -29));
+
+      if (!isIsoDate(startDate) || !isIsoDate(endDate)) {
+        res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_DATE_RANGE', message: 'startDate and endDate must use YYYY-MM-DD format.' },
+        });
+        return;
+      }
+
+      const daySpan = dateDiffInDays(startDate, endDate);
+      if (daySpan < 0 || daySpan > MAX_DIAGNOSTIC_DAYS) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_DATE_RANGE',
+            message: `Date range must be between 0 and ${MAX_DIAGNOSTIC_DAYS} days.`,
+          },
+        });
+        return;
+      }
+
+      const sql = `
+        WITH latest_pred AS (
+          SELECT *,
+            ROW_NUMBER() OVER (
+              PARTITION BY game_pk
+              ORDER BY predicted_at DESC
+            ) AS rn
+          FROM \`${PROJECT}.${SEASON_DS}.game_predictions\`
+          WHERE game_date BETWEEN '${startDate}' AND '${endDate}'
+        )
+        SELECT
+          game_pk,
+          game_date,
+          home_team_id,
+          home_team_name,
+          away_team_id,
+          away_team_name,
+          home_starter_id,
+          home_starter_name,
+          away_starter_id,
+          away_starter_name,
+          home_win_probability,
+          away_win_probability,
+          predicted_winner,
+          confidence_tier,
+          model_version,
+          lineup_confirmed,
+          game_time_utc,
+          predicted_at
+        FROM latest_pred
+        WHERE rn = 1
+        ORDER BY game_date ASC, game_time_utc ASC NULLS LAST
+      `;
+
+      const [predictionRows] = await bigquery.query({ query: sql });
+      const scheduleData = await mlbApi.getScheduleWithOptions({
+        startDate,
+        endDate,
+        sportId: 1,
+      });
+
+      const gamesByPk = new Map<number, any>();
+      (scheduleData?.dates || []).forEach((dateEntry: any) => {
+        (dateEntry.games || []).forEach((game: any) => {
+          gamesByPk.set(Number(game.gamePk), game);
+        });
+      });
+
+      const diagnostics = predictionRows
+        .map((row: any) => {
+          const game = gamesByPk.get(Number(row.game_pk));
+          if (!game || !isCompletedGame(game)) {
+            return null;
+          }
+
+          const homeScore = Number(game?.teams?.home?.score);
+          const awayScore = Number(game?.teams?.away?.score);
+          if (!Number.isFinite(homeScore) || !Number.isFinite(awayScore) || homeScore === awayScore) {
+            return null;
+          }
+
+          const homeWinProbability = clampProbability(Number(row.home_win_probability));
+          const awayWinProbability = clampProbability(
+            Number.isFinite(Number(row.away_win_probability))
+              ? Number(row.away_win_probability)
+              : 1 - homeWinProbability
+          );
+          const actualHomeWin = homeScore > awayScore;
+          const predictedWinner =
+            row.predicted_winner ||
+            (homeWinProbability >= awayWinProbability ? row.home_team_name : row.away_team_name);
+          const actualWinner = actualHomeWin ? row.home_team_name : row.away_team_name;
+          const predictedWinnerIsHome = predictedWinner === row.home_team_name;
+          const predictedWinProbability = predictedWinnerIsHome ? homeWinProbability : awayWinProbability;
+          const correct = predictedWinner === actualWinner;
+          const brierScore = Math.pow(homeWinProbability - (actualHomeWin ? 1 : 0), 2);
+          const logLoss = actualHomeWin
+            ? -Math.log(homeWinProbability)
+            : -Math.log(clampProbability(1 - homeWinProbability));
+
+          return {
+            gamePk: Number(row.game_pk),
+            gameDate: row.game_date,
+            gameTimeUtc: row.game_time_utc || game.gameDate,
+            status: game?.status?.detailedState || game?.status?.abstractGameState || 'Final',
+            homeTeamId: Number(row.home_team_id),
+            homeTeamName: row.home_team_name,
+            awayTeamId: Number(row.away_team_id),
+            awayTeamName: row.away_team_name,
+            homeStarterId: row.home_starter_id ? Number(row.home_starter_id) : null,
+            homeStarterName: row.home_starter_name || null,
+            awayStarterId: row.away_starter_id ? Number(row.away_starter_id) : null,
+            awayStarterName: row.away_starter_name || null,
+            homeWinProbability,
+            awayWinProbability,
+            predictedWinner,
+            predictedWinProbability,
+            actualWinner,
+            actualHomeWin,
+            confidenceTier: row.confidence_tier || 'LOW',
+            modelVersion: row.model_version || 'unknown',
+            lineupConfirmed: Boolean(row.lineup_confirmed),
+            edge: Math.abs(homeWinProbability - awayWinProbability),
+            correct,
+            brierScore,
+            logLoss,
+            homeScore,
+            awayScore,
+            predictedAt: row.predicted_at || null,
+          };
+        })
+        .filter(Boolean);
+
+      res.json({
+        success: true,
+        startDate,
+        endDate,
+        totalPredictions: predictionRows.length,
+        completedGames: diagnostics.length,
+        pendingGames: predictionRows.length - diagnostics.length,
+        diagnostics,
+      });
+    } catch (error: any) {
+      logger.error('Failed to fetch prediction diagnostics', { error: error.message });
+      res.status(500).json({
+        success: false,
+        error: { code: 'PREDICTION_DIAGNOSTICS_ERROR', message: error.message },
+      });
     }
   }
 }

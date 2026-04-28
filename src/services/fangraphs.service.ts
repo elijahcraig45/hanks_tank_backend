@@ -18,6 +18,7 @@ export interface FanGraphsStatcastRequest {
   p_throws?: string;
   stands?: string;
   events?: string;
+  limit?: string;
 }
 
 export class FanGraphsService {
@@ -77,7 +78,8 @@ export class FanGraphsService {
         playerId,
         p_throws = '',
         stands = '',
-        events = ''
+        events = '',
+        limit = '1500'
       } = request;
 
       let url = `${this.statcastBaseUrl}/csv?all=true&hfPT=&hfAB=&hfBBT=&hfPR=&hfZ=&stadium=&hfBBL=&hfNewZones=&hfGT=R%7C&hfC=&hfSea=${year}%7C&hfSit=&player_type=${position}&hfOuts=&opponent=&pitcher_throws=&batter_stands=&hfSA=&game_date_gt=&game_date_lt=&hfInfield=&team=&position=&hfOutfield=&hfRO=&home_road=&hfFlag=&hfPull=&metric_1=&hfInn=&min_pitches=0&min_results=0&group_by=name&sort_col=pitches&player_event_sort=h_launch_speed&sort_order=desc&min_pas=0&type=details&`;
@@ -114,14 +116,18 @@ export class FanGraphsService {
       // Parse CSV response to JSON
       const csvData = response.data as string;
       const jsonData = this.parseCSVToJSON(csvData);
+      const parsedLimit = parseInt(limit, 10);
+      const limitedData = Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? jsonData.slice(0, parsedLimit)
+        : jsonData;
 
       logger.info('Statcast data fetched successfully', { 
-        recordCount: jsonData.length,
+        recordCount: limitedData.length,
         year,
         position 
       });
 
-      return jsonData;
+      return limitedData;
 
     } catch (error: any) {
       logger.error('Error fetching Statcast data', {

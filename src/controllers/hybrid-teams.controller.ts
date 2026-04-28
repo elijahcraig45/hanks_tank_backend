@@ -55,29 +55,30 @@ export class HybridTeamsController {
   static async getTeamById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id: teamId } = req.params;
-      const { season } = req.query;
+      const { season, hydrate } = req.query;
       const parsedSeason = season ? parseInt(season as string) : undefined;
+      const parsedTeamId = parseInt(Array.isArray(teamId) ? teamId[0] : teamId);
       
       const startTime = Date.now();
       
-      const data = await dataSourceService.getData({
-        season: parsedSeason,
-        teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
-        dataType: 'team-stats'
-      });
+      const data = await mlbApi.getTeamById(
+        parsedTeamId,
+        parsedSeason,
+        (hydrate as string | undefined) || 'venue,division,league'
+      );
       
       const responseTime = Date.now() - startTime;
       
       logger.info('Team details fetched', {
-        teamId,
+        teamId: parsedTeamId,
         season: parsedSeason,
         responseTime
       });
 
       res.json(ResponseFormatter.success({
-        team: data,
+        team: data?.teams?.[0] || null,
         metadata: {
-          teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
+          teamId: parsedTeamId,
           season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'
@@ -139,21 +140,26 @@ export class HybridTeamsController {
   static async getTeamSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id: teamId } = req.params;
-      const { season } = req.query;
+      const { season, date, startDate, endDate, hydrate } = req.query;
       const parsedSeason = season ? parseInt(season as string) : undefined;
+      const parsedTeamId = parseInt(Array.isArray(teamId) ? teamId[0] : teamId);
       
       const startTime = Date.now();
       
       const data = await dataSourceService.getData({
         season: parsedSeason,
-        teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
-        dataType: 'schedule'
+        teamId: parsedTeamId,
+        dataType: 'schedule',
+        date: date as string | undefined,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        hydrate: hydrate as string | undefined,
       });
       
       const responseTime = Date.now() - startTime;
       
       logger.info('Team schedule fetched', {
-        teamId,
+        teamId: parsedTeamId,
         season: parsedSeason,
         responseTime
       });
@@ -161,7 +167,7 @@ export class HybridTeamsController {
       res.json(ResponseFormatter.success({
         schedule: data,
         metadata: {
-          teamId: parseInt(Array.isArray(teamId) ? teamId[0] : teamId),
+          teamId: parsedTeamId,
           season: parsedSeason || gcpConfig.dataSource.currentSeason,
           responseTime,
           source: 'hybrid'

@@ -29,6 +29,10 @@ export interface DataRequest {
   season?: number;
   teamId?: number;
   playerId?: number;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  hydrate?: string;
   dataType: 'team-stats' | 'player-stats' | 'schedule' | 'roster' | 'standings' | 'news' | 'reports' | 'analysis' | 'team-batting' | 'team-pitching' | 'player-batting' | 'player-pitching' | 'available-stats' | 'player-data' | 'statcast';
   statType?: 'batting' | 'pitching' | 'fielding';
   // Additional query parameters for legacy endpoints
@@ -606,7 +610,7 @@ export class DataSourceService {
    * Fetch from live MLB API or FanGraphs (fallback)
    */
   private async getLiveData(request: DataRequest): Promise<any> {
-    const { season, teamId, dataType, playerId, position, year, stats, orderBy, direction, p_throws, stands, events } = request;
+    const { season, teamId, dataType, playerId, position, year, stats, orderBy, direction, p_throws, stands, events, limit } = request;
 
     // Handle FanGraphs-specific endpoints that we don't have historical data for
     switch (dataType) {
@@ -624,7 +628,8 @@ export class DataSourceService {
           playerId: playerId?.toString(),
           p_throws,
           stands,
-          events
+          events,
+          limit
         });
 
       case 'available-stats':
@@ -714,7 +719,15 @@ export class DataSourceService {
 
       case 'schedule':
         if (!teamId) throw new Error('Team ID required for schedule data');
-        return await mlbApi.getSchedule(teamId.toString(), season?.toString());
+        return await mlbApi.getScheduleWithOptions({
+          teamId,
+          season,
+          date: request.date,
+          startDate: request.startDate,
+          endDate: request.endDate,
+          hydrate: request.hydrate,
+          sportId: 1,
+        });
 
       case 'standings':
         // MLB API requires leagueId parameter - need both AL (103) and NL (104) for complete standings
