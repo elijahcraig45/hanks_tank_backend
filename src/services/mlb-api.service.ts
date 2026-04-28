@@ -141,7 +141,7 @@ interface MLBGame {
   ifNecessaryDescription: string;
 }
 
-class MLBApiService {
+export class MLBApiService {
   private api: any;
   private baseUrl: string;
 
@@ -157,6 +157,10 @@ class MLBApiService {
     });
 
     this.setupInterceptors();
+  }
+
+  private getStatsApiBaseUrl(version: 'v1' | 'v1.1'): string {
+    return this.baseUrl.replace(/\/api\/v1(?:\.1)?$/, `/api/${version}`);
   }
 
   private setupInterceptors(): void {
@@ -451,7 +455,7 @@ class MLBApiService {
     const cacheKey = CacheKeys.game.byId(gameId);
     return this.getCachedOrFetch(
       cacheKey,
-      () => this.makeRequest(`/game/${gameId}/feed/live`),
+      () => this.makeRequest(`${this.getStatsApiBaseUrl('v1.1')}/game/${gameId}/feed/live`),
       config.cache.ttl.games
     );
   }

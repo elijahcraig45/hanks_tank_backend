@@ -24,6 +24,15 @@ function getSingleValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function getAxiosStatusCode(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('response' in error)) {
+    return undefined;
+  }
+
+  const response = (error as { response?: { status?: unknown } }).response;
+  return typeof response?.status === 'number' ? response.status : undefined;
+}
+
 export class LegacyController {
 
   /**
@@ -318,18 +327,33 @@ export class LegacyController {
    * Same-origin game detail endpoint for live game surfaces
    */
   async getGameDetails(req: Request, res: Response): Promise<void> {
+    const rawGamePk = getSingleValue(req.params.gamePk);
+
     try {
-      const gamePk = parseInt(getSingleValue(req.params.gamePk), 10);
+      const gamePk = parseInt(rawGamePk, 10);
+      if (Number.isNaN(gamePk)) {
+        res.status(400).json({ error: 'Invalid gamePk' });
+        return;
+      }
 
       logger.info('Game details request', { gamePk });
 
       const data = await mlbApi.getGameById(gamePk);
       res.json(data);
     } catch (error) {
+      const upstreamStatus = getAxiosStatusCode(error);
+
       logger.error('Error fetching game details', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        gamePk: req.params.gamePk
+        gamePk: rawGamePk,
+        upstreamStatus,
       });
+
+      if (upstreamStatus === 404) {
+        res.status(404).json({ error: 'Game not found' });
+        return;
+      }
+
       res.status(500).json({ error: 'Failed to fetch game details' });
     }
   }
