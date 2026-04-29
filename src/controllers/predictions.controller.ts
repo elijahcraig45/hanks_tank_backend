@@ -42,6 +42,31 @@ function clampProbability(value: number): number {
   return Math.min(0.999999, Math.max(0.000001, value));
 }
 
+function normalizeBigQueryTemporalValue<T>(value: T | { value: T } | null | undefined): T | string | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === 'object' && 'value' in value) {
+    return normalizeBigQueryTemporalValue(value.value);
+  }
+
+  return value;
+}
+
+function normalizePredictionRow(row: any): any {
+  return {
+    ...row,
+    game_date: normalizeBigQueryTemporalValue(row.game_date),
+    game_time_utc: normalizeBigQueryTemporalValue(row.game_time_utc),
+    predicted_at: normalizeBigQueryTemporalValue(row.predicted_at),
+  };
+}
+
 function isCompletedGame(game: any): boolean {
   return (
     game?.status?.abstractGameState === 'Final' ||
@@ -134,12 +159,13 @@ class PredictionsController {
       `;
 
       const [rows] = await bigquery.query({ query: sql });
+      const predictions = rows.map(normalizePredictionRow);
 
       res.json({
         success: true,
         date,
-        count: rows.length,
-        predictions: rows,
+        count: predictions.length,
+        predictions,
       });
     } catch (error: any) {
       logger.error('Failed to fetch predictions', { error: error.message });
@@ -218,13 +244,14 @@ class PredictionsController {
       `;
 
       const [rows] = await bigquery.query({ query: sql });
+      const predictions = rows.map(normalizePredictionRow);
 
-      if (!rows.length) {
+      if (!predictions.length) {
         res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `No prediction for game ${gamePk}` } });
         return;
       }
 
-      res.json({ success: true, prediction: rows[0] });
+      res.json({ success: true, prediction: predictions[0] });
     } catch (error: any) {
       logger.error('Failed to fetch game prediction', { error: error.message, gamePk: req.params.gamePk });
       res.status(500).json({ success: false, error: { code: 'PREDICTIONS_ERROR', message: error.message } });
@@ -296,6 +323,7 @@ class PredictionsController {
       `;
 
       const [predictionRows] = await bigquery.query({ query: sql });
+      const normalizedPredictionRows = predictionRows.map(normalizePredictionRow);
       const scheduleData = await mlbApi.getScheduleWithOptions({
         startDate,
         endDate,
@@ -309,7 +337,7 @@ class PredictionsController {
         });
       });
 
-      const diagnostics = predictionRows
+      const diagnostics = normalizedPredictionRows
         .map((row: any) => {
           const game = gamesByPk.get(Number(row.game_pk));
           if (!game || !isCompletedGame(game)) {
@@ -378,9 +406,9 @@ class PredictionsController {
         success: true,
         startDate,
         endDate,
-        totalPredictions: predictionRows.length,
+        totalPredictions: normalizedPredictionRows.length,
         completedGames: diagnostics.length,
-        pendingGames: predictionRows.length - diagnostics.length,
+        pendingGames: normalizedPredictionRows.length - diagnostics.length,
         diagnostics,
       });
     } catch (error: any) {

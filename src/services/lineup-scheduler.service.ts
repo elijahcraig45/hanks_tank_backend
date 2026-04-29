@@ -2,7 +2,7 @@
  * Lineup Scheduler Service
  *
  * Creates Cloud Tasks that trigger the ML Cloud Function's `pregame` mode
- * approximately 90 minutes before each game's first pitch.
+ * at multiple checkpoints before each game's first pitch.
  *
  * Each task calls the ML Cloud Function endpoint with:
  *   { mode: "pregame", game_pks: [pk], date: "YYYY-MM-DD" }
@@ -35,10 +35,11 @@ export class LineupSchedulerService {
   private mlFunctionUrl: string;
 
   /**
-   * How many minutes before first pitch to trigger the pre-game pipeline.
-   * 90 min gives time for lineup data to be posted by the club.
+   * Pregame checkpoints that probe for lineups before first pitch.
+   * Clubs often publish lineups several hours early, so we refresh
+   * repeatedly instead of waiting for a single late task.
    */
-  private readonly PREGAME_MINUTES_BEFORE = 90;
+  private readonly PREGAME_CHECKPOINT_MINUTES = [360, 180, 90, 45];
 
   constructor() {
     this.client = new CloudTasksClient();
@@ -118,11 +119,9 @@ export class LineupSchedulerService {
 
   /**
    * Given a list of today's games (with UTC start times), schedule one
-   * Cloud Task per game, each targeting 90 minutes before first pitch.
+   * immediate baseline task plus multiple pregame refreshes per game.
    *
-   * Skips games where the 90-min window has already passed.
-   * For games where we're between 0–30 min past the trigger window,
-   * schedules an immediate task instead (line-ups may still be available).
+   * Skips games where first pitch has already passed.
    */
   async scheduleAllGamesForDate(games: GameScheduleItem[]): Promise<{
      scheduled: number;
@@ -149,55 +148,40 @@ export class LineupSchedulerService {
          continue;
        }
 
-       const triggerMs = gameTimeMs - this.PREGAME_MINUTES_BEFORE * 60 * 1000;
-       const delayMs = triggerMs - now;
+        try {
+          await this.schedulePregameTask({
+            game_pks: [game.game_pk],
+            game_date: game.game_date,
+            delay_seconds: 0,
+          });
+          scheduled.push({
+            game_pk: game.game_pk,
+            trigger_time: new Date(now).toISOString(),
+            delay_seconds: 0,
+            phase: 'baseline',
+          });
 
-       try {
-         if (delayMs >= 0) {
-           await this.schedulePregameTask({
-             game_pks: [game.game_pk],
-             game_date: game.game_date,
-             delay_seconds: 0,
-           });
-           scheduled.push({
-             game_pk: game.game_pk,
-             trigger_time: new Date(now).toISOString(),
-             delay_seconds: 0,
-             phase: 'baseline',
-           });
+          for (const checkpointMinutes of this.PREGAME_CHECKPOINT_MINUTES) {
+            const triggerMs = gameTimeMs - checkpointMinutes * 60 * 1000;
+            if (triggerMs <= now) {
+              continue;
+            }
 
-           const delaySeconds = Math.floor(delayMs / 1000);
-           await this.schedulePregameTask({
-             game_pks: [game.game_pk],
-             game_date: game.game_date,
-             delay_seconds: delaySeconds,
-           });
-           scheduled.push({
-             game_pk: game.game_pk,
-             trigger_time: new Date(now + delaySeconds * 1000).toISOString(),
-             delay_seconds: delaySeconds,
-             phase: 'confirmed-refresh',
-           });
-         } else if (delayMs >= -30 * 60 * 1000) {
-           logger.info('Game %d trigger window slightly passed — scheduling immediate refresh', game.game_pk);
-           await this.schedulePregameTask({
-             game_pks: [game.game_pk],
-             game_date: game.game_date,
-             delay_seconds: 0,
-           });
-           scheduled.push({
-             game_pk: game.game_pk,
-             trigger_time: new Date(now).toISOString(),
-             delay_seconds: 0,
-             phase: 'confirmed-refresh',
-           });
-         } else {
-           logger.info('Skipping game %d — pre-game window has passed', game.game_pk);
-           skipped++;
-           continue;
-         }
-       } catch (err) {
-         logger.error('Failed to schedule task for game', {
+            const delaySeconds = Math.floor((triggerMs - now) / 1000);
+            await this.schedulePregameTask({
+              game_pks: [game.game_pk],
+              game_date: game.game_date,
+              delay_seconds: delaySeconds,
+            });
+            scheduled.push({
+              game_pk: game.game_pk,
+              trigger_time: new Date(now + delaySeconds * 1000).toISOString(),
+              delay_seconds: delaySeconds,
+              phase: `lineup-refresh-${checkpointMinutes}m`,
+            });
+          }
+        } catch (err) {
+          logger.error('Failed to schedule task for game', {
            game_pk: game.game_pk,
           error: err instanceof Error ? err.message : String(err),
         });
