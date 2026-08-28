@@ -11,6 +11,8 @@ import transactionsRoutes from './routes/transactions.routes';
 import lineupRoutes from './routes/lineup.routes';
 import predictionsRoutes from './routes/predictions.routes';
 import scoutingReportsRoutes from './routes/scouting-reports.routes';
+import nflRoutes from './routes/nfl.routes';
+import footballRoutes from './routes/football.routes';
 import { validateGCPConfig } from './config/gcp.config';
 import { schedulerService } from './services/scheduler.service';
 
@@ -64,6 +66,8 @@ app.use('/api/validation', validationRoutes); // Data validation and scheduled j
 app.use('/api/lineup', lineupRoutes); // Lineup scheduling and pre-game task management
 app.use('/api/predictions', predictionsRoutes); // Game predictions and matchup signals
 app.use('/api/scouting-reports', scoutingReportsRoutes); // Pre-computed daily scouting reports
+app.use('/api/football', footballRoutes); // NFL + CFB predictions, accuracy, searchable stats
+app.use('/api/nfl', nflRoutes); // legacy alias for /api/football/nfl
 app.use('/api', legacyRoutes); // Legacy endpoints for backward compatibility
 
 // 404 handler

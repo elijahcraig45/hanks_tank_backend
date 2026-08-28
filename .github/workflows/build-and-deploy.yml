@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
       
@@ -76,7 +76,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
       
@@ -143,6 +143,12 @@ jobs:
         if: steps.deploy-auth.outputs.auth_mode != 'none'
         uses: google-github-actions/setup-gcloud@v2
       
+      - name: Render app.yaml with secrets
+        if: steps.deploy-auth.outputs.auth_mode != 'none'
+        run: bash scripts/render-app-yaml.sh
+        env:
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+
       - name: Deploy to App Engine
         if: steps.deploy-auth.outputs.auth_mode != 'none'
-        run: gcloud app deploy --quiet --project=${{ env.PROJECT_ID }}
+        run: gcloud app deploy app.generated.yaml --quiet --project=${{ env.PROJECT_ID }}

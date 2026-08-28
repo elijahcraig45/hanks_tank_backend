@@ -34,19 +34,7 @@ export const config = {
       stats: parseInt(process.env.CACHE_TTL_STATS || '3600', 10), // 1 hour
     },
   },
-  
-  // Database configuration
-  database: {
-    postgres: {
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
-      database: process.env.DB_NAME || 'mlb_analytics',
-      username: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || '',
-      ssl: process.env.DB_SSL === 'true',
-    },
-  },
-  
+
   // External API configuration
   external: {
     weather: {
