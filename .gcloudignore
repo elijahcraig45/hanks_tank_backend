@@ -52,3 +52,7 @@ node_modules/
 data/
 logs/
 scripts/__pycache__/
+
+# never ship rendered secrets or stale env files in the App Engine source upload
+app.generated.yaml
+.env.production

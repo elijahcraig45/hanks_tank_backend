@@ -1,0 +1,344 @@
+/**
+ * Football predictions controller — serves both NFL and CFB off a sport registry.
+ *
+ * Mounted at /api/football/:sport/*. The legacy /api/nfl/* routes alias onto this so
+ * nothing that already points at them breaks.
+ *
+ * Football never routes through DataSourceService: both feeds are batch-loaded into
+ * BigQuery, so there is no live-API fallback to reconcile and no sportId to generalize.
+ */
+
+import { Request, Response } from 'express';
+import { BigQuery } from '@google-cloud/bigquery';
+import { logger } from '../utils/logger';
+import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
+import { getFootballSport, FootballSportConfig } from '../config/football.config';
+
+const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
+const bigquery = new BigQuery({ projectId: PROJECT });
+
+function resolveSport(req: Request, res: Response): FootballSportConfig | null {
+  const key = (req.params.sport || 'nfl').toLowerCase();
+  const sport = getFootballSport(key);
+  if (!sport) {
+    res.status(404).json({
+      success: false,
+      error: { code: 'UNKNOWN_SPORT', message: `Unknown football sport: ${key}` },
+    });
+    return null;
+  }
+  return sport;
+}
+
+function normalizeRow(row: any): any {
+  return {
+    ...row,
+    game_date: normalizeBigQueryTemporalValue(row.game_date),
+    predicted_at: normalizeBigQueryTemporalValue(row.predicted_at),
+  };
+}
+
+/** GET /api/football/:sport/predictions?season=&week=&team=&tier=&division= */
+export async function getPredictions(req: Request, res: Response): Promise<void> {
+  const sport = resolveSport(req, res);
+  if (!sport) return;
+
+  try {
+    const { season, week, team, tier, division } = req.query as Record<string, string>;
+    const filters: string[] = [];
+    const params: Record<string, any> = {};
+
+    if (season) { filters.push('season = @season'); params.season = parseInt(season, 10); }
+    if (week) { filters.push('week = @week'); params.week = parseInt(week, 10); }
+    if (team) {
+      filters.push('(UPPER(home_team_name) LIKE @team OR UPPER(away_team_name) LIKE @team)');
+      params.team = `%${team.toUpperCase()}%`;
+    }
+    if (tier) { filters.push('confidence_tier = @tier'); params.tier = tier.toLowerCase(); }
+    if (division && sport.hasDivisions) {
+      filters.push('division = @division');
+      params.division = division.toLowerCase();
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const sql = `
+      SELECT *
+      FROM \`${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}\`
+      ${where}
+      ORDER BY season DESC, week DESC, game_date
+      LIMIT 500
+    `;
+
+    const [rows] = await bigquery.query({ query: sql, params });
+    const data = rows.map(normalizeRow);
+    res.json({ success: true, data, meta: { sport: sport.key, count: data.length } });
+  } catch (error: any) {
+    logger.error('football predictions query failed', {
+      sport: sport.key, error: error.message,
+    });
+    res.status(500).json({
+      success: false,
+      error: { code: 'PREDICTIONS_ERROR', message: 'Failed to load predictions' },
+    });
+  }
+}
+
+/** GET /api/football/:sport/predictions/accuracy?season=&division= */
+export async function getAccuracy(req: Request, res: Response): Promise<void> {
+  const sport = resolveSport(req, res);
+  if (!sport) return;
+
+  try {
+    const season = parseInt((req.query.season as string) || '2025', 10);
+    const division = (req.query.division as string || '').toLowerCase();
+
+    const params: Record<string, any> = { season };
+    const extra: string[] = [];
+    if (division && sport.hasDivisions) {
+      extra.push('AND division = @division');
+      params.division = division;
+    }
+
+    // Vegas baseline only exists where a spread was stored (NFL); CFB's free feed
+    // carries no lines, so the column is absent and the baseline comes back null.
+    const vegasExpr = sport.key === 'nfl'
+      ? `AVG(CASE WHEN spread_line IS NOT NULL AND spread_line != 0
+                  THEN IF((spread_line > 0) = (home_won = 1), 1.0, 0.0) END)`
+      : 'CAST(NULL AS FLOAT64)';
+
+    const sql = `
+      SELECT
+        COUNT(*)                                     AS games,
+        AVG(CAST(prediction_correct AS FLOAT64))     AS model_accuracy,
+        AVG(CAST(home_won AS FLOAT64))               AS always_home_accuracy,
+        AVG(IF(elo_home_win_prob IS NULL, NULL,
+               IF((elo_home_win_prob > 0.5) = (home_won = 1), 1.0, 0.0)))
+                                                     AS elo_accuracy,
+        ${vegasExpr}                                 AS vegas_accuracy
+      FROM \`${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}\`
+      WHERE season = @season AND prediction_correct IS NOT NULL ${extra.join(' ')}
+    `;
+
+    const tierSql = `
+      SELECT confidence_tier,
+             COUNT(*) AS games,
+             AVG(CAST(prediction_correct AS FLOAT64)) AS accuracy
+      FROM \`${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}\`
+      WHERE season = @season AND prediction_correct IS NOT NULL ${extra.join(' ')}
+      GROUP BY confidence_tier
+    `;
+
+    const [[overall]] = await bigquery.query({ query: sql, params });
+    const [tiers] = await bigquery.query({ query: tierSql, params });
+
+    res.json({
+      success: true,
+      data: { sport: sport.key, season, division: division || null, overall, by_tier: tiers },
+    });
+  } catch (error: any) {
+    logger.error('football accuracy query failed', {
+      sport: sport.key, error: error.message,
+    });
+    res.status(500).json({
+      success: false,
+      error: { code: 'ACCURACY_ERROR', message: 'Failed to load accuracy' },
+    });
+  }
+}
+
+/** GET /api/football/:sport/stats/teams — searchable advanced stats (NFL only today). */
+export async function searchTeamStats(req: Request, res: Response): Promise<void> {
+  const sport = resolveSport(req, res);
+  if (!sport) return;
+
+  if (!sport.statsTable) {
+    res.json({
+      success: true,
+      data: [],
+      meta: {
+        sport: sport.key, total: 0, count: 0, sortable_fields: [],
+        note: 'No per-team advanced stats feed for this sport yet.',
+      },
+    });
+    return;
+  }
+
+  try {
+    const {
+      season, week, team, search,
+      sort = 'off_epa_play', direction = 'desc',
+      limit = '100', offset = '0',
+    } = req.query as Record<string, string>;
+
+    if (!sport.sortableStatFields.includes(sort)) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_SORT',
+          message: `sort must be one of: ${sport.sortableStatFields.join(', ')}`,
+        },
+      });
+      return;
+    }
+
+    const dir = direction.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const filters: string[] = [];
+    const params: Record<string, any> = {
+      limit: Math.min(parseInt(limit, 10) || 100, 500),
+      offset: parseInt(offset, 10) || 0,
+    };
+
+    if (season) { filters.push('season = @season'); params.season = parseInt(season, 10); }
+    if (week) { filters.push('week = @week'); params.week = parseInt(week, 10); }
+    if (team) { filters.push('team = @team'); params.team = team.toUpperCase(); }
+    if (search) { filters.push('LOWER(team) LIKE @search'); params.search = `%${search.toLowerCase()}%`; }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const table = `\`${PROJECT}.${sport.histDataset}.${sport.statsTable}\``;
+
+    const [rows] = await bigquery.query({
+      query: `SELECT * FROM ${table} ${where} ORDER BY ${sort} ${dir} LIMIT @limit OFFSET @offset`,
+      params,
+    });
+    const [[{ total }]] = await bigquery.query({
+      query: `SELECT COUNT(*) AS total FROM ${table} ${where}`,
+      params,
+    });
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: {
+        sport: sport.key, total, count: rows.length,
+        limit: params.limit, offset: params.offset, sort, direction: dir,
+        sortable_fields: sport.sortableStatFields,
+      },
+    });
+  } catch (error: any) {
+    logger.error('football stats search failed', { sport: sport.key, error: error.message });
+    res.status(500).json({
+      success: false,
+      error: { code: 'STATS_ERROR', message: 'Failed to search team stats' },
+    });
+  }
+}
+
+/**
+ * GET /api/football/:sport/rankings?season=
+ *
+ * Bradley-Terry power ratings: one global maximum-likelihood fit over every game,
+ * rather than a path-dependent Elo walk. Ships the uncertainty alongside the order —
+ * bootstrap rank ranges and the probability each team beats the one below it — because
+ * outside the top couple of spots the ordering is not statistically meaningful.
+ */
+export async function getRankings(req: Request, res: Response): Promise<void> {
+  const sport = resolveSport(req, res);
+  if (!sport) return;
+
+  if (!sport.rankingsTable) {
+    res.json({
+      success: true,
+      data: [],
+      meta: { sport: sport.key, note: 'No power rankings for this sport yet.' },
+    });
+    return;
+  }
+
+  try {
+    const season = parseInt((req.query.season as string) || '2025', 10);
+    const limit = Math.min(parseInt((req.query.limit as string) || '25', 10), 100);
+
+    // as_of_week lets the table hold a weekly history; take the latest snapshot.
+    const sql = `
+      SELECT * FROM \`${PROJECT}.${sport.seasonDataset}.${sport.rankingsTable}\`
+      WHERE season = @season
+        AND as_of_week = (
+          SELECT MAX(as_of_week)
+          FROM \`${PROJECT}.${sport.seasonDataset}.${sport.rankingsTable}\`
+          WHERE season = @season
+        )
+      ORDER BY rank
+      LIMIT @limit
+    `;
+
+    const [rows] = await bigquery.query({ query: sql, params: { season, limit } });
+    const first: any = rows[0] || {};
+    res.json({
+      success: true,
+      data: rows,
+      meta: {
+        sport: sport.key,
+        season,
+        count: rows.length,
+        as_of_week: first.as_of_week ?? null,
+        home_field_points: first.home_field_points ?? null,
+        fbs_over_fcs_points: first.fbs_over_fcs_points ?? null,
+        prior_weight: first.prior_weight ?? null,
+        method: 'Bradley-Terry, ridge-regularized, with an explicit division baseline '
+          + 'and a decaying prior on the previous season',
+      },
+    });
+  } catch (error: any) {
+    logger.error('football rankings query failed', {
+      sport: sport.key, error: error.message,
+    });
+    res.status(500).json({
+      success: false,
+      error: { code: 'RANKINGS_ERROR', message: 'Failed to load power rankings' },
+    });
+  }
+}
+
+/** GET /api/football/:sport/stats/games — searchable game results. */
+export async function searchGames(req: Request, res: Response): Promise<void> {
+  const sport = resolveSport(req, res);
+  if (!sport) return;
+
+  try {
+    const {
+      season, week, team, division,
+      limit = '100', offset = '0',
+    } = req.query as Record<string, string>;
+
+    const filters: string[] = [];
+    const params: Record<string, any> = {
+      limit: Math.min(parseInt(limit, 10) || 100, 500),
+      offset: parseInt(offset, 10) || 0,
+    };
+
+    if (season) { filters.push('season = @season'); params.season = parseInt(season, 10); }
+    if (week) { filters.push('week = @week'); params.week = parseInt(week, 10); }
+    if (team) {
+      filters.push('(UPPER(home_team) LIKE @team OR UPPER(away_team) LIKE @team)');
+      params.team = `%${team.toUpperCase()}%`;
+    }
+    if (division && sport.hasDivisions) {
+      filters.push('division = @division');
+      params.division = division.toLowerCase();
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const sql = `
+      SELECT *
+      FROM \`${PROJECT}.${sport.histDataset}.${sport.gamesTable}\`
+      ${where}
+      ORDER BY game_date DESC
+      LIMIT @limit OFFSET @offset
+    `;
+
+    const [rows] = await bigquery.query({ query: sql, params });
+    res.json({
+      success: true,
+      data: rows.map((r: any) => ({
+        ...r, game_date: normalizeBigQueryTemporalValue(r.game_date),
+      })),
+      meta: { sport: sport.key, count: rows.length, limit: params.limit, offset: params.offset },
+    });
+  } catch (error: any) {
+    logger.error('football games search failed', { sport: sport.key, error: error.message });
+    res.status(500).json({
+      success: false,
+      error: { code: 'GAMES_ERROR', message: 'Failed to search games' },
+    });
+  }
+}
