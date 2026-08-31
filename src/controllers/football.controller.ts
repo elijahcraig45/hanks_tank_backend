@@ -17,6 +17,16 @@ import { getFootballSport, FootballSportConfig } from '../config/football.config
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 const bigquery = new BigQuery({ projectId: PROJECT });
 
+// Sortable player columns, allow-listed because BigQuery cannot parameterize an
+// ORDER BY identifier and the value arrives from the query string.
+const NFL_PLAYER_SORT_FIELDS = [
+  'passing_yards', 'passing_tds', 'passing_epa', 'passing_interceptions',
+  'completions', 'attempts', 'rushing_yards', 'rushing_tds', 'carries',
+  'rushing_epa', 'receiving_yards', 'receiving_tds', 'receptions', 'targets',
+  'receiving_epa', 'def_sacks', 'def_tackles_solo', 'def_interceptions',
+  'def_pass_defended', 'games',
+];
+
 function resolveSport(req: Request, res: Response): FootballSportConfig | null {
   const key = (req.params.sport || 'nfl').toLowerCase();
   const sport = getFootballSport(key);
@@ -223,72 +233,6 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
   }
 }
 
-/**
- * GET /api/football/:sport/rankings?season=
- *
- * Bradley-Terry power ratings: one global maximum-likelihood fit over every game,
- * rather than a path-dependent Elo walk. Ships the uncertainty alongside the order —
- * bootstrap rank ranges and the probability each team beats the one below it — because
- * outside the top couple of spots the ordering is not statistically meaningful.
- */
-export async function getRankings(req: Request, res: Response): Promise<void> {
-  const sport = resolveSport(req, res);
-  if (!sport) return;
-
-  if (!sport.rankingsTable) {
-    res.json({
-      success: true,
-      data: [],
-      meta: { sport: sport.key, note: 'No power rankings for this sport yet.' },
-    });
-    return;
-  }
-
-  try {
-    const season = parseInt((req.query.season as string) || '2025', 10);
-    const limit = Math.min(parseInt((req.query.limit as string) || '25', 10), 100);
-
-    // as_of_week lets the table hold a weekly history; take the latest snapshot.
-    const sql = `
-      SELECT * FROM \`${PROJECT}.${sport.seasonDataset}.${sport.rankingsTable}\`
-      WHERE season = @season
-        AND as_of_week = (
-          SELECT MAX(as_of_week)
-          FROM \`${PROJECT}.${sport.seasonDataset}.${sport.rankingsTable}\`
-          WHERE season = @season
-        )
-      ORDER BY rank
-      LIMIT @limit
-    `;
-
-    const [rows] = await bigquery.query({ query: sql, params: { season, limit } });
-    const first: any = rows[0] || {};
-    res.json({
-      success: true,
-      data: rows,
-      meta: {
-        sport: sport.key,
-        season,
-        count: rows.length,
-        as_of_week: first.as_of_week ?? null,
-        home_field_points: first.home_field_points ?? null,
-        fbs_over_fcs_points: first.fbs_over_fcs_points ?? null,
-        prior_weight: first.prior_weight ?? null,
-        method: 'Bradley-Terry, ridge-regularized, with an explicit division baseline '
-          + 'and a decaying prior on the previous season',
-      },
-    });
-  } catch (error: any) {
-    logger.error('football rankings query failed', {
-      sport: sport.key, error: error.message,
-    });
-    res.status(500).json({
-      success: false,
-      error: { code: 'RANKINGS_ERROR', message: 'Failed to load power rankings' },
-    });
-  }
-}
-
 /** GET /api/football/:sport/stats/games — searchable game results. */
 export async function searchGames(req: Request, res: Response): Promise<void> {
   const sport = resolveSport(req, res);
@@ -339,6 +283,192 @@ export async function searchGames(req: Request, res: Response): Promise<void> {
     res.status(500).json({
       success: false,
       error: { code: 'GAMES_ERROR', message: 'Failed to search games' },
+    });
+  }
+}
+
+/**
+ * GET /api/football/:sport/stats/leaders?season=&category=&limit=
+ *
+ * Long-form: one row per (category, rank), so a client can render every category at
+ * once or filter to one without a second shape to handle.
+ */
+export async function getLeaders(req: Request, res: Response): Promise<void> {
+  const sport = resolveSport(req, res);
+  if (!sport) return;
+
+  if (!sport.leadersTable) {
+    res.json({
+      success: true,
+      data: [],
+      meta: { sport: sport.key, note: 'No league leaders for this sport yet.' },
+    });
+    return;
+  }
+
+  try {
+    const season = parseInt((req.query.season as string) || '', 10);
+    if (!Number.isFinite(season)) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'BAD_SEASON', message: 'season is required' },
+      });
+      return;
+    }
+
+    const category = (req.query.category as string) || '';
+    const limit = Math.min(parseInt((req.query.limit as string) || '400', 10), 500);
+
+    const filters = ['season = @season'];
+    const params: Record<string, any> = { season, limit };
+    if (category) {
+      filters.push('category = @category');
+      params.category = category;
+    }
+
+    const table = `${PROJECT}.${sport.seasonDataset}.${sport.leadersTable}`;
+    const [rows] = await bigquery.query({
+      query: `SELECT * FROM \`${table}\`
+              WHERE ${filters.join(' AND ')}
+              ORDER BY category_label, rank
+              LIMIT @limit`,
+      params,
+    });
+
+    const categories = Array.from(
+      new Map(
+        rows.map((r: any) => [r.category, r.category_label])
+      ).entries()
+    ).map(([key, label]) => ({ key, label }));
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: { sport: sport.key, season, count: rows.length, categories },
+    });
+  } catch (error: any) {
+    if (/not found|does not exist/i.test(error?.message || '')) {
+      res.json({
+        success: true,
+        data: [],
+        meta: { sport: sport.key, note: 'League leaders have not been built yet.' },
+      });
+      return;
+    }
+    logger.error('football leaders query failed', {
+      sport: sport.key, error: error.message,
+    });
+    res.status(500).json({
+      success: false,
+      error: { code: 'LEADERS_ERROR', message: 'Failed to load league leaders' },
+    });
+  }
+}
+
+/**
+ * GET /api/football/:sport/stats/players?season=&search=&position=&sort=&limit=
+ *
+ * A sport without a player table answers with its own note rather than an error — for
+ * college that is a fact about the feed, not a failure.
+ */
+export async function searchPlayers(req: Request, res: Response): Promise<void> {
+  const sport = resolveSport(req, res);
+  if (!sport) return;
+
+  if (!sport.playerTable) {
+    res.json({
+      success: true,
+      data: [],
+      meta: {
+        sport: sport.key,
+        note: sport.playerNote || 'No per-player stats for this sport yet.',
+      },
+    });
+    return;
+  }
+
+  try {
+    const season = parseInt((req.query.season as string) || '', 10);
+    if (!Number.isFinite(season)) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'BAD_SEASON', message: 'season is required' },
+      });
+      return;
+    }
+
+    const search = (req.query.search as string) || '';
+    const position = (req.query.position as string) || '';
+    const team = (req.query.team as string) || '';
+    const limit = Math.min(parseInt((req.query.limit as string) || '50', 10), 200);
+    const offset = Math.max(parseInt((req.query.offset as string) || '0', 10), 0);
+
+    // Sort is interpolated, not parameterized — BigQuery cannot bind an identifier — so
+    // it is checked against an allow-list. Never pass the raw value through.
+    const requested = (req.query.sort as string) || 'passing_yards';
+    const sort = NFL_PLAYER_SORT_FIELDS.includes(requested) ? requested : 'passing_yards';
+    const dir = ((req.query.direction as string) || 'desc').toLowerCase() === 'asc'
+      ? 'ASC' : 'DESC';
+
+    const filters = ['season = @season'];
+    const params: Record<string, any> = { season, limit, offset };
+    if (search) {
+      filters.push('UPPER(player_display_name) LIKE @search');
+      params.search = `%${search.toUpperCase()}%`;
+    }
+    if (position) {
+      filters.push('UPPER(position) = @position');
+      params.position = position.toUpperCase();
+    }
+    if (team) {
+      filters.push('UPPER(recent_team) = @team');
+      params.team = team.toUpperCase();
+    }
+
+    const table = `${PROJECT}.${sport.seasonDataset}.${sport.playerTable}`;
+    const where = `WHERE ${filters.join(' AND ')}`;
+
+    const [rows] = await bigquery.query({
+      query: `SELECT * FROM \`${table}\` ${where}
+              ORDER BY ${sort} ${dir} NULLS LAST
+              LIMIT @limit OFFSET @offset`,
+      params,
+    });
+    const [[{ total }]] = await bigquery.query({
+      query: `SELECT COUNT(*) AS total FROM \`${table}\` ${where}`,
+      params,
+    }) as any;
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: {
+        sport: sport.key,
+        season,
+        total,
+        count: rows.length,
+        limit,
+        offset,
+        sort,
+        direction: dir,
+        sortable_fields: NFL_PLAYER_SORT_FIELDS,
+      },
+    });
+  } catch (error: any) {
+    if (/not found|does not exist/i.test(error?.message || '')) {
+      res.json({
+        success: true,
+        data: [],
+        meta: { sport: sport.key, note: 'Player stats have not been built yet.' },
+      });
+      return;
+    }
+    logger.error('football player search failed', {
+      sport: sport.key, error: error.message,
+    });
+    res.status(500).json({
+      success: false,
+      error: { code: 'PLAYERS_ERROR', message: 'Failed to load player stats' },
     });
   }
 }
