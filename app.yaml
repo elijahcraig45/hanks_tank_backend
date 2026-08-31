@@ -16,6 +16,13 @@ env_variables:
   BQ_DATASET: mlb_historical_data
   USE_DEFAULT_GCP_CREDENTIALS: true
   CURRENT_SEASON: 2026
+  # Football and rankings datasets. The code defaults to these same values, but naming
+  # them here keeps production config readable instead of implicit.
+  NFL_DATASET: nfl_season
+  NFL_HIST_DATASET: nfl_historical
+  CFB_DATASET: cfb_season
+  CFB_HIST_DATASET: cfb_historical
+  MLB_RANKINGS_DATASET: mlb_2026_season
   MIN_SEASON: 2015
   MAX_SEASON: 2026
   # Injected at deploy time from the NEWS_API_KEY env var / GitHub secret.
