@@ -472,3 +472,137 @@ export async function searchPlayers(req: Request, res: Response): Promise<void> 
     });
   }
 }
+
+/**
+ * GET /api/football/:sport/predictions/diagnostics
+ *   ?season=&seasons=&division=&fromWeek=&toWeek=
+ *
+ * Scored predictions joined with what actually happened, one row per game, in the same
+ * shape the MLB diagnostics page consumes so the frontend maths is shared.
+ *
+ * Unlike MLB this needs no external join: the football pipeline stores `home_won`,
+ * `actual_winner` and `prediction_correct` when it scores a week. Brier and log loss
+ * are computed here rather than stored, so a change to either definition does not
+ * require rewriting history.
+ */
+export async function getDiagnostics(req: Request, res: Response): Promise<void> {
+  const sport = resolveSport(req, res);
+  if (!sport) return;
+
+  try {
+    const { season, seasons, division, fromWeek, toWeek } = req.query as Record<string, string>;
+
+    // home_won is required as well as prediction_correct: Brier and log loss are
+    // derived from it, and a row scored without it would look correctly scored while
+    // reporting the wrong error on every game.
+    const filters = ['prediction_correct IS NOT NULL', 'home_won IS NOT NULL'];
+    const params: Record<string, any> = {};
+
+    // `seasons` takes a comma list so the page can compare years in one request;
+    // `season` stays supported for a single year.
+    const seasonList = (seasons || season || '')
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter(Number.isFinite);
+    if (seasonList.length) {
+      filters.push('season IN UNNEST(@seasons)');
+      params.seasons = seasonList;
+    }
+
+    if (division && sport.hasDivisions) {
+      filters.push('division = @division');
+      params.division = division.toLowerCase();
+    }
+    if (fromWeek) { filters.push('week >= @fromWeek'); params.fromWeek = parseInt(fromWeek, 10); }
+    if (toWeek) { filters.push('week <= @toWeek'); params.toWeek = parseInt(toWeek, 10); }
+
+    const table = `${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}`;
+    const sql = `
+      SELECT *
+      FROM \`${table}\`
+      WHERE ${filters.join(' AND ')}
+      ORDER BY season, week, game_date
+      LIMIT 6000
+    `;
+
+    const [rows] = await bigquery.query({ query: sql, params });
+
+    // Clamped so a probability of exactly 0 or 1 cannot produce an infinite log loss.
+    const clamp = (p: number) => Math.min(Math.max(p, 1e-6), 1 - 1e-6);
+
+    const diagnostics = rows.map((r: any) => {
+      const homeProb = clamp(Number(r.home_win_probability));
+      const awayProb = 1 - homeProb;
+      const homeWon = Number(r.home_won) === 1;
+      const predictedWinner = r.predicted_winner
+        || (homeProb >= 0.5 ? r.home_team_name : r.away_team_name);
+      const predictedIsHome = predictedWinner === r.home_team_name;
+
+      return {
+        gameId: r.game_id,
+        gameDate: normalizeBigQueryTemporalValue(r.game_date),
+        season: r.season,
+        week: r.week,
+        division: r.division ?? null,
+        homeTeamName: r.home_team_name,
+        awayTeamName: r.away_team_name,
+        homeWinProbability: homeProb,
+        awayWinProbability: awayProb,
+        predictedWinner,
+        predictedWinProbability: predictedIsHome ? homeProb : awayProb,
+        actualWinner: r.actual_winner,
+        actualHomeWin: homeWon,
+        confidenceTier: (r.confidence_tier || 'low').toUpperCase(),
+        modelVersion: r.model_version || 'unknown',
+        edge: Math.abs(homeProb - awayProb),
+        correct: Number(r.prediction_correct) === 1,
+        brierScore: (homeProb - (homeWon ? 1 : 0)) ** 2,
+        logLoss: homeWon ? -Math.log(homeProb) : -Math.log(clamp(awayProb)),
+        // Football-specific context the page can slice by.
+        neutralSite: Boolean(r.neutral_site),
+        isDivisional: Boolean(r.is_divisional),
+        crossDivision: Boolean(r.cross_division),
+        spreadLine: r.spread_line ?? null,
+        vegasImpliedHomeProb: r.vegas_implied_home_prob ?? null,
+        // Did the closing favourite win? Null wherever no line was stored (all of CFB).
+        vegasCorrect: r.spread_line == null || Number(r.spread_line) === 0
+          ? null
+          : (Number(r.spread_line) > 0) === homeWon,
+      };
+    });
+
+    const seasonsPresent = [...new Set(diagnostics.map((d: any) => d.season))].sort();
+    const weeks = diagnostics.map((d: any) => d.week).filter((w: any) => w != null);
+    const models = [...new Set(diagnostics.map((d: any) => d.modelVersion))];
+
+    res.json({
+      success: true,
+      diagnostics,
+      meta: {
+        sport: sport.key,
+        division: params.division ?? null,
+        count: diagnostics.length,
+        seasons: seasonsPresent,
+        models,
+        weekRange: weeks.length ? [Math.min(...weeks), Math.max(...weeks)] : null,
+        hasVegas: diagnostics.some((d: any) => d.vegasCorrect !== null),
+      },
+    });
+  } catch (error: any) {
+    if (/not found|does not exist/i.test(error?.message || '')) {
+      res.json({
+        success: true,
+        diagnostics: [],
+        meta: { sport: sport.key, count: 0, note: 'No scored predictions yet.' },
+      });
+      return;
+    }
+    logger.error('football diagnostics query failed', {
+      sport: sport.key, error: error.message,
+    });
+    res.status(500).json({
+      success: false,
+      error: { code: 'DIAGNOSTICS_ERROR', message: 'Failed to load diagnostics' },
+    });
+  }
+}
