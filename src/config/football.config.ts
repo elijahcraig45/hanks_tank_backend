@@ -16,10 +16,22 @@ export interface FootballSportConfig {
   gamesTable: string;
   /** Per-team, per-week advanced stats. NFL has EPA; CFB has none from the free feed. */
   statsTable: string | null;
+  /** Per-team SEASON totals, including opponent splits (college only). */
+  teamSeasonTable: string | null;
+  /** Full per-player season table. NFL only — see playerNote for why. */
+  playerTable: string | null;
+  /** League leaders, long-form: one row per (category, rank). */
+  leadersTable: string | null;
+  /** Shown in place of a player search the sport cannot support. */
+  playerNote?: string;
+  sortableSeasonFields?: string[];
   /** CFB splits FBS/FCS via a division column; NFL has no such split. */
   hasDivisions: boolean;
   sortableStatFields: string[];
-  /** Bradley-Terry power rankings. CFB only so far. */
+  /**
+   * Bradley-Terry power rankings. Every sport now has a board; rankings themselves are
+   * served by rankings.controller, so this only records that the sport has one.
+   */
   rankingsTable: string | null;
 }
 
@@ -41,7 +53,10 @@ export const FOOTBALL_SPORTS: Record<string, FootballSportConfig> = {
     statsTable: 'team_week_epa',
     hasDivisions: false,
     sortableStatFields: NFL_STAT_FIELDS,
-    rankingsTable: null,
+    teamSeasonTable: null,
+    playerTable: 'player_season_stats',
+    leadersTable: 'stat_leaders',
+    rankingsTable: 'power_rankings',
   },
   cfb: {
     key: 'cfb',
@@ -53,6 +68,18 @@ export const FOOTBALL_SPORTS: Record<string, FootballSportConfig> = {
     statsTable: null,
     hasDivisions: true,
     sortableStatFields: [],
+    teamSeasonTable: 'team_season_stats',
+    playerTable: null,
+    leadersTable: 'stat_leaders',
+    // No public ESPN endpoint returns a full college per-player season table: the
+    // sortable athlete endpoint returns "-" for the very stat it sorts on, and passing
+    // an explicit category 400s. Leaders are what the feed can actually support.
+    playerNote: 'College player stats are limited to league leaders — the public feed '
+      + 'does not publish a full per-player season table.',
+    sortableSeasonFields: [
+      'totalPointsPerGame', 'totalYards', 'passingYards', 'rushingYards',
+      'yardsPerGame', 'completionPct', 'opp_totalPointsPerGame', 'opp_totalYards',
+    ],
     rankingsTable: 'power_rankings',
   },
 };

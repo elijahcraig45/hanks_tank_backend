@@ -13,6 +13,7 @@ import predictionsRoutes from './routes/predictions.routes';
 import scoutingReportsRoutes from './routes/scouting-reports.routes';
 import nflRoutes from './routes/nfl.routes';
 import footballRoutes from './routes/football.routes';
+import rankingsRoutes from './routes/rankings.routes';
 import { validateGCPConfig } from './config/gcp.config';
 import { schedulerService } from './services/scheduler.service';
 
@@ -67,6 +68,7 @@ app.use('/api/lineup', lineupRoutes); // Lineup scheduling and pre-game task man
 app.use('/api/predictions', predictionsRoutes); // Game predictions and matchup signals
 app.use('/api/scouting-reports', scoutingReportsRoutes); // Pre-computed daily scouting reports
 app.use('/api/football', footballRoutes); // NFL + CFB predictions, accuracy, searchable stats
+app.use('/api/rankings', rankingsRoutes); // Bradley-Terry power rankings, all sports
 app.use('/api/nfl', nflRoutes); // legacy alias for /api/football/nfl
 app.use('/api', legacyRoutes); // Legacy endpoints for backward compatibility
 
