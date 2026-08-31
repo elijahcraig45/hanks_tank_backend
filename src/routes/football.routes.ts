@@ -13,6 +13,7 @@ import {
   searchGames,
   getLeaders,
   searchPlayers,
+  getDiagnostics,
 } from '../controllers/football.controller';
 // Rankings share one schema across every sport, so they share one controller; this
 // path stays only so the football tab's existing URL keeps working.
@@ -22,6 +23,7 @@ const router = Router({ mergeParams: true });
 
 // accuracy must be declared before the bare /predictions route so it is not shadowed
 router.get('/:sport/predictions/accuracy', getAccuracy);
+router.get('/:sport/predictions/diagnostics', getDiagnostics);
 router.get('/:sport/predictions', getPredictions);
 router.get('/:sport/rankings', getRankings);
 router.get('/:sport/stats/teams', searchTeamStats);
