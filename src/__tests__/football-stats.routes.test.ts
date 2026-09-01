@@ -31,6 +31,7 @@ import {
   mockQuery, rows, count, queue, sentQueries, sentParams,
 } from './helpers/bq-mock';
 import footballRoutes from '../routes/football.routes';
+import { cacheService } from '../services/cache.service';
 
 let server: Server;
 let baseUrl: string;
@@ -48,7 +49,12 @@ beforeAll((done) => {
 });
 
 afterAll((done) => { server.close(done); });
-beforeEach(() => { jest.clearAllMocks(); });
+// The response cache is process-wide and these tests reuse query strings, so without a
+// flush the second identical request is served from cache and never reaches the mock.
+beforeEach(async () => {
+  jest.clearAllMocks();
+  await cacheService.flush();
+});
 
 const get = async (path: string) => {
   const res = await fetch(`${baseUrl}${path}`);
