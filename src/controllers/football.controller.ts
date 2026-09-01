@@ -12,7 +12,13 @@ import { Request, Response } from 'express';
 import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
-import { getFootballSport, FootballSportConfig } from '../config/football.config';
+import { FootballSportConfig, datasetFor } from '../config/football.config';
+import { getColumnCatalog } from '../config/football-columns.config';
+import {
+  resolveSport,
+  normalizeRow,
+  isMissingTable,
+} from '../utils/football-request';
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 const bigquery = new BigQuery({ projectId: PROJECT });
@@ -26,27 +32,6 @@ const NFL_PLAYER_SORT_FIELDS = [
   'receiving_epa', 'def_sacks', 'def_tackles_solo', 'def_interceptions',
   'def_pass_defended', 'games',
 ];
-
-function resolveSport(req: Request, res: Response): FootballSportConfig | null {
-  const key = (req.params.sport || 'nfl').toLowerCase();
-  const sport = getFootballSport(key);
-  if (!sport) {
-    res.status(404).json({
-      success: false,
-      error: { code: 'UNKNOWN_SPORT', message: `Unknown football sport: ${key}` },
-    });
-    return null;
-  }
-  return sport;
-}
-
-function normalizeRow(row: any): any {
-  return {
-    ...row,
-    game_date: normalizeBigQueryTemporalValue(row.game_date),
-    predicted_at: normalizeBigQueryTemporalValue(row.predicted_at),
-  };
-}
 
 /** GET /api/football/:sport/predictions?season=&week=&team=&tier=&division= */
 export async function getPredictions(req: Request, res: Response): Promise<void> {
@@ -146,6 +131,24 @@ export async function getAccuracy(req: Request, res: Response): Promise<void> {
       data: { sport: sport.key, season, division: division || null, overall, by_tier: tiers },
     });
   } catch (error: any) {
+    // A sport whose predictions table has not been built yet is an expected state, not
+    // an outage. Every other football handler already answered that with a note; this
+    // one went straight to 500, so a missing table read as a server error.
+    if (isMissingTable(error)) {
+      logger.warn('football accuracy table unavailable', {
+        sport: sport.key, error: error.message,
+      });
+      res.json({
+        success: true,
+        data: null,
+        meta: {
+          sport: sport.key,
+          label: sport.label,
+          note: `${sport.label} predictions are not built yet.`,
+        },
+      });
+      return;
+    }
     logger.error('football accuracy query failed', {
       sport: sport.key, error: error.message,
     });
@@ -162,12 +165,22 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
   if (!sport) return;
 
   if (!sport.statsTable) {
+    // Says what IS available rather than only what is not. The old wording — "no
+    // per-team advanced stats feed for this sport yet" — was already false: college
+    // season totals were sitting in BigQuery the whole time, just unreachable.
+    const seasonPath = sport.teamSeasonTable
+      ? `/api/football/${sport.key}/stats/teams/season`
+      : null;
     res.json({
       success: true,
       data: [],
       meta: {
-        sport: sport.key, total: 0, count: 0, sortable_fields: [],
-        note: 'No per-team advanced stats feed for this sport yet.',
+        sport: sport.key, label: sport.label, scope: 'week',
+        total: 0, count: 0, sortable_fields: [],
+        season_endpoint: seasonPath,
+        note: seasonPath
+          ? `${sport.label} has no per-week feed yet — season totals are at ${seasonPath}.`
+          : `${sport.label} has no per-week stats feed yet.`,
       },
     });
     return;
@@ -204,10 +217,22 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
     if (search) { filters.push('LOWER(team) LIKE @search'); params.search = `%${search.toLowerCase()}%`; }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-    const table = `\`${PROJECT}.${sport.histDataset}.${sport.statsTable}\``;
+    const table =
+      `\`${PROJECT}.${datasetFor(sport, sport.statsDataset)}.${sport.statsTable}\``;
+
+    // Projected from the catalog rather than SELECT *. This table is only 17 columns,
+    // so the win is not payload size — it is that both stats endpoints now describe
+    // what they returned in meta.columns, and the client renders from that instead of
+    // hardcoding one sport's column names.
+    const catalog = getColumnCatalog(sport.statsColumnCatalog);
+    const projection = catalog ? catalog.columns : [];
+    const select = projection.length
+      ? projection.map((c) => `\`${c.key}\``).join(', ')
+      : '*';
 
     const [rows] = await bigquery.query({
-      query: `SELECT * FROM ${table} ${where} ORDER BY ${sort} ${dir} LIMIT @limit OFFSET @offset`,
+      query: `SELECT ${select} FROM ${table} ${where} `
+        + `ORDER BY \`${sort}\` ${dir} LIMIT @limit OFFSET @offset`,
       params,
     });
     const [[{ total }]] = await bigquery.query({
@@ -219,9 +244,28 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
       success: true,
       data: rows,
       meta: {
-        sport: sport.key, total, count: rows.length,
+        sport: sport.key, label: sport.label, scope: 'week',
+        total, count: rows.length,
         limit: params.limit, offset: params.offset, sort, direction: dir,
         sortable_fields: sport.sortableStatFields,
+        groups: catalog
+          ? catalog.groups.map((gr) => ({
+              key: gr.key,
+              label: gr.label,
+              count: catalog.columns.filter((c) => c.group === gr.key).length,
+            }))
+          : [],
+        columns: projection.map((c) => ({
+          key: c.key,
+          label: c.label,
+          group: c.group,
+          format: c.format,
+          higher_is_better: c.higherIsBetter ?? null,
+          opponent: c.opponent ?? false,
+        })),
+        season_endpoint: sport.teamSeasonTable
+          ? `/api/football/${sport.key}/stats/teams/season`
+          : null,
       },
     });
   } catch (error: any) {
@@ -347,7 +391,7 @@ export async function getLeaders(req: Request, res: Response): Promise<void> {
       meta: { sport: sport.key, season, count: rows.length, categories },
     });
   } catch (error: any) {
-    if (/not found|does not exist/i.test(error?.message || '')) {
+    if (isMissingTable(error)) {
       res.json({
         success: true,
         data: [],
@@ -455,7 +499,7 @@ export async function searchPlayers(req: Request, res: Response): Promise<void> 
       },
     });
   } catch (error: any) {
-    if (/not found|does not exist/i.test(error?.message || '')) {
+    if (isMissingTable(error)) {
       res.json({
         success: true,
         data: [],
@@ -589,7 +633,7 @@ export async function getDiagnostics(req: Request, res: Response): Promise<void>
       },
     });
   } catch (error: any) {
-    if (/not found|does not exist/i.test(error?.message || '')) {
+    if (isMissingTable(error)) {
       res.json({
         success: true,
         diagnostics: [],
