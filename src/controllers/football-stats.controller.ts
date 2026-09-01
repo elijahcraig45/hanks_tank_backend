@@ -15,15 +15,15 @@
  * than from a hardcoded list of column names.
  */
 
-import { Request, Response } from 'express';
-import { BigQuery } from '@google-cloud/bigquery';
-import { logger } from '../utils/logger';
-import { datasetFor, FootballSportConfig } from '../config/football.config';
+import { Request, Response } from "express";
+import { BigQuery } from "@google-cloud/bigquery";
+import { logger } from "../utils/logger";
+import { datasetFor, FootballSportConfig } from "../config/football.config";
 import {
   getColumnCatalog,
   resolveColumns,
   ColumnSpec,
-} from '../config/football-columns.config';
+} from "../config/football-columns.config";
 import {
   resolveSport,
   isMissingTable,
@@ -31,9 +31,16 @@ import {
   parsePaging,
   pickSort,
   sortDirection,
-} from '../utils/football-request';
+} from "../utils/football-request";
+import {
+  serveCached,
+  seasonAwareTTL,
+  currentSeason,
+  FootballCacheKeys,
+  FootballCacheTTL,
+} from "../utils/football-cache";
 
-const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
+const PROJECT = process.env.GCP_PROJECT_ID || "hankstank";
 const bigquery = new BigQuery({ projectId: PROJECT });
 
 /** Serialise the catalog for the wire. snake_case to match the rest of meta. */
@@ -69,38 +76,43 @@ export async function searchTeamSeasonStats(
   if (!sport) return;
 
   if (!sport.teamSeasonTable || !sport.teamSeasonColumnCatalog) {
-    respondUnavailable(res, sport, 'per-team season stats');
+    respondUnavailable(res, sport, "per-team season stats");
     return;
   }
 
   const catalog = getColumnCatalog(sport.teamSeasonColumnCatalog);
   if (!catalog) {
-    logger.error('football season catalog missing', {
-      sport: sport.key, catalog: sport.teamSeasonColumnCatalog,
+    logger.error("football season catalog missing", {
+      sport: sport.key,
+      catalog: sport.teamSeasonColumnCatalog,
     });
     res.status(500).json({
       success: false,
-      error: { code: 'CATALOG_ERROR', message: 'Failed to load column catalog' },
+      error: {
+        code: "CATALOG_ERROR",
+        message: "Failed to load column catalog",
+      },
     });
     return;
   }
 
   const q = req.query as Record<string, string>;
   const allowedSort = sport.sortableSeasonFields || [];
-  const sort = pickSort(q.sort, allowedSort, allowedSort[0] || 'season');
+  const sort = pickSort(q.sort, allowedSort, allowedSort[0] || "season");
   if (!sort) {
     res.status(400).json({
       success: false,
       error: {
-        code: 'INVALID_SORT',
-        message: `sort must be one of: ${allowedSort.join(', ')}`,
+        code: "INVALID_SORT",
+        message: `sort must be one of: ${allowedSort.join(", ")}`,
       },
     });
     return;
   }
 
   const { columns, unknown } = resolveColumns(catalog, {
-    fields: q.fields, group: q.group,
+    fields: q.fields,
+    group: q.group,
   });
 
   // The sort column has to be in the projection or BigQuery cannot order by it.
@@ -114,7 +126,7 @@ export async function searchTeamSeasonStats(
   // Params the table cannot satisfy. Ignored rather than passed to SQL: the season
   // table has no week or division column, and filtering on one raises
   // `Unrecognized name`, which reads as a server error rather than a bad request.
-  const ignored = ['week', 'division'].filter((p) => q[p] !== undefined);
+  const ignored = ["week", "division"].filter((p) => q[p] !== undefined);
 
   try {
     const { limit, offset } = parsePaging(q, { limit: 50, max: 200 });
@@ -124,79 +136,109 @@ export async function searchTeamSeasonStats(
     const params: Record<string, any> = { limit, offset };
 
     if (q.season) {
-      filters.push('season = @season');
+      filters.push("season = @season");
       params.season = parseInt(q.season, 10);
     }
     if (q.team) {
-      filters.push('team = @team');
+      filters.push("team = @team");
       params.team = q.team;
     }
     if (q.search) {
-      filters.push('(LOWER(team) LIKE @search OR LOWER(team_abbr) LIKE @search)');
+      filters.push(
+        "(LOWER(team) LIKE @search OR LOWER(team_abbr) LIKE @search)",
+      );
       params.search = `%${q.search.toLowerCase()}%`;
     }
 
-    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
     const dataset = datasetFor(sport, sport.teamSeasonDataset);
     const table = `\`${PROJECT}.${dataset}.${sport.teamSeasonTable}\``;
-    const select = projection.map((c) => quoteIdent(c.key)).join(', ');
+    const select = projection.map((c) => quoteIdent(c.key)).join(", ");
 
-    const [rows] = await bigquery.query({
-      query: `SELECT ${select} FROM ${table} ${where} `
-        + `ORDER BY ${quoteIdent(sort)} ${dir} LIMIT @limit OFFSET @offset`,
-      params,
+    const season = q.season ? parseInt(q.season, 10) : undefined;
+    const cacheKey = FootballCacheKeys.teamSeason(sport.key, {
+      season: q.season,
+      team: q.team,
+      search: q.search,
+      group: q.group,
+      fields: q.fields,
+      sort,
+      dir,
+      limit,
+      offset,
     });
-    const [[{ total }]] = await bigquery.query({
-      query: `SELECT COUNT(*) AS total FROM ${table} ${where}`,
-      params,
-    });
+    const ttl = seasonAwareTTL(
+      FootballCacheTTL.teamSeason,
+      season,
+      currentSeason(),
+    );
 
-    res.json({
-      success: true,
-      data: rows,
-      meta: {
-        sport: sport.key,
-        label: sport.label,
-        scope: 'season',
-        total,
-        count: rows.length,
-        limit,
-        offset,
-        sort,
-        direction: dir,
-        sortable_fields: allowedSort,
-        group: q.fields ? null : (q.group || 'core'),
-        groups: catalog.groups.map((gr) => ({
-          key: gr.key,
-          label: gr.label,
-          count: catalog.columns.filter((c) => c.group === gr.key).length,
-        })),
-        columns: wireColumns(projection),
-        coverage: sport.teamSeasonCoverage || null,
-        week_endpoint: sport.statsTable
-          ? `/api/football/${sport.key}/stats/teams`
-          : null,
-        ...(ignored.length ? { ignored_params: ignored } : {}),
-        ...(unknown.length ? { unknown_fields: unknown } : {}),
-      },
+    await serveCached(res, cacheKey, ttl, async () => {
+      const [rows] = await bigquery.query({
+        query:
+          `SELECT ${select} FROM ${table} ${where} ` +
+          `ORDER BY ${quoteIdent(sort)} ${dir} LIMIT @limit OFFSET @offset`,
+        params,
+      });
+      const [[{ total }]] = await bigquery.query({
+        query: `SELECT COUNT(*) AS total FROM ${table} ${where}`,
+        params,
+      });
+
+      return {
+        success: true,
+        data: rows,
+        meta: {
+          sport: sport.key,
+          label: sport.label,
+          scope: "season",
+          total,
+          count: rows.length,
+          limit,
+          offset,
+          sort,
+          direction: dir,
+          sortable_fields: allowedSort,
+          group: q.fields ? null : q.group || "core",
+          groups: catalog.groups.map((gr) => ({
+            key: gr.key,
+            label: gr.label,
+            count: catalog.columns.filter((c) => c.group === gr.key).length,
+          })),
+          columns: wireColumns(projection),
+          coverage: sport.teamSeasonCoverage || null,
+          week_endpoint: sport.statsTable
+            ? `/api/football/${sport.key}/stats/teams`
+            : null,
+          ...(ignored.length ? { ignored_params: ignored } : {}),
+          ...(unknown.length ? { unknown_fields: unknown } : {}),
+        },
+      };
     });
   } catch (error: any) {
     if (isMissingTable(error)) {
-      logger.warn('football season stats table unavailable', {
-        sport: sport.key, error: error.message,
+      logger.warn("football season stats table unavailable", {
+        sport: sport.key,
+        error: error.message,
       });
       respondUnavailable(
-        res, sport, 'per-team season stats',
+        res,
+        sport,
+        "per-team season stats",
         `${sport.label} season stats are configured but not built yet.`,
       );
       return;
     }
-    logger.error('football season stats search failed', {
-      sport: sport.key, error: error.message,
+    logger.error("football season stats search failed", {
+      sport: sport.key,
+      error: error.message,
     });
     res.status(500).json({
       success: false,
-      error: { code: 'STATS_ERROR', message: 'Failed to search team season stats' },
+      error: {
+        code: "STATS_ERROR",
+        message: "Failed to search team season stats",
+      },
     });
   }
 }
@@ -218,7 +260,7 @@ export async function getTeams(req: Request, res: Response): Promise<void> {
   if (!sport) return;
 
   if (!sport.teamsTable) {
-    respondUnavailable(res, sport, 'team metadata');
+    respondUnavailable(res, sport, "team metadata");
     return;
   }
 
@@ -236,7 +278,7 @@ export async function getTeams(req: Request, res: Response): Promise<void> {
     // nfl_historical.teams carries 36 rows for 32 clubs: relocated franchises
     // (OAK, SD, STL) keep their historical abbreviations. Anything rendering a current
     // league list wants the 32, so restrict to clubs that appear in the newest season.
-    const activeOnly = (q.active ?? 'true').toLowerCase() !== 'false';
+    const activeOnly = (q.active ?? "true").toLowerCase() !== "false";
     if (activeOnly) {
       filters.push(`team_abbr IN (
         SELECT home_team FROM ${games}
@@ -247,79 +289,92 @@ export async function getTeams(req: Request, res: Response): Promise<void> {
       )`);
     }
     if (q.conference) {
-      filters.push('LOWER(team_conf) = @conference');
+      filters.push("LOWER(team_conf) = @conference");
       params.conference = q.conference.toLowerCase();
     }
     if (q.search) {
       filters.push(
-        '(LOWER(team_name) LIKE @search OR LOWER(team_abbr) LIKE @search '
-        + 'OR LOWER(team_nick) LIKE @search)',
+        "(LOWER(team_name) LIKE @search OR LOWER(team_abbr) LIKE @search " +
+          "OR LOWER(team_nick) LIKE @search)",
       );
       params.search = `%${q.search.toLowerCase()}%`;
     }
 
-    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
 
-    const [rows] = await bigquery.query({
-      query: `
+    const cacheKey = FootballCacheKeys.teams(sport.key, {
+      search: q.search,
+      conference: q.conference,
+      active: activeOnly,
+      limit,
+    });
+
+    await serveCached(res, cacheKey, FootballCacheTTL.teams, async () => {
+      const [rows] = await bigquery.query({
+        query: `
         SELECT team_abbr, team_name, team_nick, team_conf, team_division,
                team_color, team_color2, team_logo_espn, team_logo_squared,
                team_wordmark
         FROM ${table} ${where}
         ORDER BY team_name
         LIMIT @limit`,
-      params,
-    });
+        params,
+      });
 
-    const data = rows.map((r: any) => ({
-      key: r.team_abbr,
-      sport: sport.key,
-      abbr: r.team_abbr,
-      name: r.team_name,
-      nick: r.team_nick,
-      school: null,
-      conference: r.team_conf,
-      division: r.team_division,
-      classification: null,
-      primary_color: r.team_color,
-      secondary_color: r.team_color2,
-      logo: r.team_logo_espn,
-      logo_squared: r.team_logo_squared,
-      wordmark: r.team_wordmark,
-      // Every spelling the other football tables use for this team, deduped.
-      aliases: [...new Set(
-        [r.team_abbr, r.team_name, r.team_nick].filter(Boolean),
-      )],
-    }));
-
-    res.json({
-      success: true,
-      data,
-      meta: {
+      const data = rows.map((r: any) => ({
+        key: r.team_abbr,
         sport: sport.key,
-        label: sport.label,
-        count: data.length,
-        active: activeOnly,
-        source: 'nflverse',
-      },
+        abbr: r.team_abbr,
+        name: r.team_name,
+        nick: r.team_nick,
+        school: null,
+        conference: r.team_conf,
+        division: r.team_division,
+        classification: null,
+        primary_color: r.team_color,
+        secondary_color: r.team_color2,
+        logo: r.team_logo_espn,
+        logo_squared: r.team_logo_squared,
+        wordmark: r.team_wordmark,
+        // Every spelling the other football tables use for this team, deduped.
+        aliases: [
+          ...new Set([r.team_abbr, r.team_name, r.team_nick].filter(Boolean)),
+        ],
+      }));
+
+      return {
+        success: true,
+        data,
+        meta: {
+          sport: sport.key,
+          label: sport.label,
+          count: data.length,
+          active: activeOnly,
+          source: "nflverse",
+        },
+      };
     });
   } catch (error: any) {
     if (isMissingTable(error)) {
-      logger.warn('football teams table unavailable', {
-        sport: sport.key, error: error.message,
+      logger.warn("football teams table unavailable", {
+        sport: sport.key,
+        error: error.message,
       });
       respondUnavailable(
-        res, sport, 'team metadata',
+        res,
+        sport,
+        "team metadata",
         `${sport.label} team metadata is configured but not built yet.`,
       );
       return;
     }
-    logger.error('football teams query failed', {
-      sport: sport.key, error: error.message,
+    logger.error("football teams query failed", {
+      sport: sport.key,
+      error: error.message,
     });
     res.status(500).json({
       success: false,
-      error: { code: 'TEAMS_ERROR', message: 'Failed to load teams' },
+      error: { code: "TEAMS_ERROR", message: "Failed to load teams" },
     });
   }
 }
