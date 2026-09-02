@@ -75,6 +75,15 @@ export function completedTTL(base: number, isCompleted: boolean): number {
 
 let cachedKey: string | null | undefined;
 let keyLoad: Promise<string | null> | null = null;
+let keyRetryAfter = 0;
+
+/**
+ * How long to wait before re-reading a MISSING key. Same reasoning as the client id: a
+ * key that is found never changes, but caching its absence forever means a transient
+ * Secret Manager failure at cold start silently disables the live college endpoints on
+ * that instance until it is replaced.
+ */
+const MISSING_RETRY_MS = 60_000;
 
 const SECRET_NAME = process.env.CFBD_SECRET_NAME || 'cfbd-api-key';
 const SECRET_PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
@@ -118,9 +127,28 @@ async function loadKey(): Promise<string | null> {
 }
 
 async function apiKey(): Promise<string> {
-  if (cachedKey === undefined) {
-    keyLoad = keyLoad || loadKey();
-    cachedKey = await keyLoad;
+  if (!cachedKey) {
+    if (cachedKey === null && Date.now() < keyRetryAfter) throw new CfbdKeyMissing();
+
+    if (!keyLoad) {
+      keyLoad = loadKey().then((value) => {
+        cachedKey = value;
+        keyRetryAfter = value ? 0 : Date.now() + MISSING_RETRY_MS;
+        keyLoad = null;
+        return value;
+      }).catch((error) => {
+        cachedKey = null;
+        keyRetryAfter = Date.now() + MISSING_RETRY_MS;
+        keyLoad = null;
+        throw error;
+      });
+    }
+
+    try {
+      await keyLoad;
+    } catch {
+      throw new CfbdKeyMissing();
+    }
   }
   if (!cachedKey) throw new CfbdKeyMissing();
   return cachedKey;
