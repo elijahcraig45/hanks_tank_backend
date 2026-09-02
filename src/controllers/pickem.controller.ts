@@ -22,6 +22,7 @@
 import { Request, Response } from 'express';
 import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
+import { cacheService } from '../services/cache.service';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
 import { isMissingTable } from '../utils/football-request';
 import { googleClientId } from '../middleware/auth.middleware';
@@ -313,6 +314,11 @@ export async function submitPicks(req: Request, res: Response): Promise<void> {
     if (accepted.length) {
       await ensureUser(user);
       await upsertPicks(accepted);
+      // The sheet and the leaderboard are cached, and a save changes both. Without this
+      // the user would watch their own pick revert for the length of the TTL — the most
+      // alarming way a cache can be wrong, because it looks like the save failed.
+      // Cheap and league-wide: someone else's pick moves the leaderboard too.
+      await cacheService.delPattern('hank:pk:*');
     }
 
     res.json({

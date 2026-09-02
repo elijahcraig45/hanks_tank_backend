@@ -60,6 +60,7 @@ import {
   mockQuery, rows, count, sentQueries, sentParamsFor, routeQueries,
 } from './helpers/bq-mock';
 import pickemRoutes from '../routes/pickem.routes';
+import { cacheService } from '../services/cache.service';
 import { __resetAdoptionMemo } from '../controllers/pickem.controller';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const authMock = require('../middleware/auth.middleware');
@@ -79,11 +80,14 @@ beforeAll((done) => {
   });
 });
 afterAll((done) => { server.close(done); });
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
   authMock.__setConfigured(true);
   // The adoption memo is per-instance, so it would otherwise carry between tests.
   __resetAdoptionMemo();
+  // So would the response cache. These tests assert on what the handler queried, and a
+  // cached body from the previous test means it queries nothing at all.
+  await cacheService.flush();
 });
 
 async function call(path: string, init: any = {}) {
@@ -91,6 +95,18 @@ async function call(path: string, init: any = {}) {
   return { status: res.status, body: await res.json() as any };
 }
 const signedIn = { headers: { Authorization: 'Bearer good' } };
+
+/**
+ * A call that is guaranteed to reach the handler.
+ *
+ * `/me` is cached per viewer, so a repeat request from the same signed-in user is
+ * normally served without touching BigQuery — which is the point of the cache, and
+ * exactly wrong for the tests that count how many queries a sequence of requests makes.
+ */
+async function callUncached(path: string, init: any = {}) {
+  await cacheService.flush();
+  return call(path, init);
+}
 
 const game = (over: any = {}) => ({
   game_id: 'g1', sport: 'nfl', division: null, season: 2026, week: 1,
@@ -430,10 +446,13 @@ describe('registering the signed-in user', () => {
   });
 
   it('does not re-register on every request', async () => {
+    // Each call flushes the response cache first, so the handler really runs all three
+    // times. Otherwise a cache hit would satisfy this test even with the memo removed,
+    // and the assertion would stop meaning anything.
     routeQueries([[/COUNT\(\*\) AS n/s, rows([{ n: 0 }])]]);
-    await call('/api/pickem/me?season=2026', signedIn);
-    await call('/api/pickem/me?season=2026', signedIn);
-    await call('/api/pickem/me?season=2026', signedIn);
+    await callUncached('/api/pickem/me?season=2026', signedIn);
+    await callUncached('/api/pickem/me?season=2026', signedIn);
+    await callUncached('/api/pickem/me?season=2026', signedIn);
     expect(sentQueries().filter((q) => /MERGE .*users/s.test(q))).toHaveLength(1);
   });
 
@@ -448,8 +467,8 @@ describe('registering the signed-in user', () => {
         return rows([]);
       }],
     ]);
-    await call('/api/pickem/me?season=2026', signedIn);
-    await call('/api/pickem/me?season=2026', signedIn);
+    await callUncached('/api/pickem/me?season=2026', signedIn);
+    await callUncached('/api/pickem/me?season=2026', signedIn);
 
     expect(sentQueries().filter((q) => /MERGE .*users/s.test(q)).length)
       .toBeGreaterThanOrEqual(2);
