@@ -140,9 +140,14 @@ export async function getWeekGames(req: Request, res: Response): Promise<void> {
       // leaderboard and sees an imported history on the sheet itself.
       await ensureUser(req.user);
 
+      // Read from the graded view rather than the raw table, so the sheet can show
+      // how a pick turned out alongside the pick itself. Making and reviewing picks
+      // are the same activity a day apart; two screens for it was one too many.
       const [rows] = await bigquery.query({
-        query: `SELECT game_id, pick_type, selected, spread_at_pick, updated_at
-                FROM ${T('picks')}
+        query: `SELECT game_id, pick_type, selected, spread_at_pick, updated_at,
+                       is_correct, is_push, vegas_side, vegas_correct, took_underdog,
+                       winning_side, covering_side
+                FROM ${T('graded_picks')}
                 WHERE user_id = @userId AND sport = @sport
                   AND season = @season AND week = @week`,
         params: { userId: req.user.userId, sport, season, week },
@@ -150,6 +155,28 @@ export async function getWeekGames(req: Request, res: Response): Promise<void> {
       picks = rows.map((r: any) => ({
         ...r, updated_at: normalizeBigQueryTemporalValue(r.updated_at),
       }));
+    }
+
+    // The signed-in user's season record, so the sheet doubles as the place you check
+    // how you are doing rather than sending you elsewhere for one number.
+    let record: any = null;
+    if (req.user) {
+      try {
+        const [[row]] = await bigquery.query({
+          query: `SELECT
+                    COUNTIF(is_correct) AS wins,
+                    COUNTIF(is_correct = FALSE) AS losses,
+                    COUNTIF(is_push) AS pushes,
+                    COUNTIF(is_correct IS NULL AND NOT is_push) AS pending,
+                    COUNT(*) AS total
+                  FROM ${T('graded_picks')}
+                  WHERE user_id = @userId AND sport = @sport AND season = @season`,
+          params: { userId: req.user.userId, sport, season },
+        });
+        record = row || null;
+      } catch (error: any) {
+        logger.debug('season record unavailable', { error: error?.message });
+      }
     }
 
     res.json({
@@ -160,6 +187,7 @@ export async function getWeekGames(req: Request, res: Response): Promise<void> {
         season,
         week,
         weeks: weeks.map((w: any) => w.week),
+        record,
         count: games.length,
         open: games.filter((g: any) => !g.locked).length,
         signed_in: Boolean(req.user),
