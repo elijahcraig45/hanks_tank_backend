@@ -22,6 +22,11 @@ import {
   searchTeamSeasonStats,
   getTeams,
 } from '../controllers/football-stats.controller';
+import {
+  getScoreboard,
+  getSchedule,
+  getGameDetail,
+} from '../controllers/football-games.controller';
 
 const router = Router({ mergeParams: true });
 
@@ -37,5 +42,11 @@ router.get('/:sport/stats/leaders', getLeaders);
 router.get('/:sport/stats/players', searchPlayers);
 router.get('/:sport/stats/games', searchGames);
 router.get('/:sport/teams', getTeams);
+// Live scoreboard and schedule. Declared before /games/:gameId so neither is captured
+// as a game id, and kept distinct from /stats/games, which serves completed results
+// out of BigQuery rather than the live feed.
+router.get('/:sport/scoreboard', getScoreboard);
+router.get('/:sport/schedule', getSchedule);
+router.get('/:sport/games/:gameId', getGameDetail);
 
 export default router;

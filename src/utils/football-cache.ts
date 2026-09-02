@@ -134,3 +134,49 @@ export async function serveCached<T>(
     logger.debug('football cache write failed', { key, error: error?.message });
   }
 }
+
+/**
+ * Like serveCached, but the producer chooses the TTL.
+ *
+ * Needed where how long a response stays fresh depends on what is in it. A finished game
+ * is immutable and can be held for a day; one in progress is stale in seconds — and
+ * which it is only becomes known after fetching. Deciding the TTL up front would mean
+ * either re-assembling finished games every 20 seconds or serving a live game minutes
+ * late.
+ */
+export async function serveCachedDynamic<T>(
+  res: Response,
+  key: string,
+  produce: () => Promise<{ body: T; ttl: number }>,
+): Promise<void> {
+  let cached: { body: T; ttl: number } | null = null;
+  try {
+    cached = await cacheService.get<{ body: T; ttl: number }>(key);
+  } catch (error: any) {
+    logger.debug('football cache read failed', { key, error: error?.message });
+  }
+
+  if (cached?.body) {
+    res.set('X-Cache', 'HIT');
+    res.set('Cache-Control', `public, max-age=${cached.ttl}`);
+    res.json(cached.body);
+    return;
+  }
+
+  const { body, ttl } = await produce();
+
+  res.set('X-Cache', 'MISS');
+  res.set('Cache-Control', `public, max-age=${ttl}`);
+  res.json(body);
+
+  try {
+    const size = Buffer.byteLength(JSON.stringify(body));
+    if (size > MAX_CACHED_BYTES) {
+      logger.debug('football response too large to cache', { key, size });
+      return;
+    }
+    await cacheService.set(key, { body, ttl }, ttl);
+  } catch (error: any) {
+    logger.debug('football cache write failed', { key, error: error?.message });
+  }
+}
