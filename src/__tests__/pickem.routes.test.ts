@@ -52,7 +52,7 @@ jest.mock('../middleware/auth.middleware', () => {
   };
 });
 
-import { mockQuery, rows, sentQueries, sentParams } from './helpers/bq-mock';
+import { mockQuery, rows, sentQueries, sentParamsFor } from './helpers/bq-mock';
 import pickemRoutes from '../routes/pickem.routes';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const authMock = require('../middleware/auth.middleware');
@@ -170,8 +170,9 @@ describe('PUT /picks', () => {
   it('saves a valid pick as a side, never as a team name', async () => {
     mockQuery
       .mockResolvedValueOnce(rows([{ game_id: 'g1', spread_line: -2.5, locked: false }]))
-      .mockResolvedValueOnce(rows([]))   // user upsert
-      .mockResolvedValueOnce(rows([]));  // picks upsert
+      .mockResolvedValueOnce(rows([{ n: 0 }]))  // adoption: nothing to claim
+      .mockResolvedValueOnce(rows([]))          // user upsert
+      .mockResolvedValueOnce(rows([]));         // picks upsert
 
     const { status, body: res } = await call('/api/pickem/picks',
       body([{ game_id: 'g1', pick_type: 'ats', selected: 'away' }]));
@@ -179,9 +180,7 @@ describe('PUT /picks', () => {
     expect(status).toBe(200);
     expect(res.data.accepted).toBe(1);
     // The stored value is a side. A team name would be a pick that a rename can orphan.
-    const merge = sentQueries().find((q) => /MERGE .*picks/s.test(q));
-    expect(merge).toBeDefined();
-    const params = sentParams(2);
+    const params = sentParamsFor(/MERGE .*picks/s);
     expect(params.selected0).toBe('away');
     expect(params.pickId0).toBe('sub-123|g1|ats');
   });
@@ -206,6 +205,7 @@ describe('PUT /picks', () => {
         { game_id: 'g1', spread_line: -2.5, locked: true },
         { game_id: 'g2', spread_line: 3.0, locked: false },
       ]))
+      .mockResolvedValueOnce(rows([{ n: 0 }]))  // adoption
       .mockResolvedValueOnce(rows([]))
       .mockResolvedValueOnce(rows([]));
 
@@ -231,6 +231,7 @@ describe('PUT /picks', () => {
   it('allows a straight-up pick on a game with no line', async () => {
     mockQuery
       .mockResolvedValueOnce(rows([{ game_id: 'g1', spread_line: null, locked: false }]))
+      .mockResolvedValueOnce(rows([{ n: 0 }]))  // adoption
       .mockResolvedValueOnce(rows([]))
       .mockResolvedValueOnce(rows([]));
     const { body: res } = await call('/api/pickem/picks',
@@ -306,6 +307,7 @@ describe('GET /leaderboard', () => {
 
 describe('GET /me', () => {
   it('returns a record with pushes and pending counted separately', async () => {
+    mockQuery.mockResolvedValueOnce(rows([{ n: 0 }]));  // adoption check
     mockQuery.mockResolvedValueOnce(rows([
       { is_correct: true, is_push: false, kickoff: { value: '2026-09-13T17:00:00Z' } },
       { is_correct: false, is_push: false, kickoff: { value: '2026-09-13T17:00:00Z' } },
@@ -321,5 +323,36 @@ describe('GET /me', () => {
   it('requires a signed-in user', async () => {
     const { status } = await call('/api/pickem/me');
     expect(status).toBe(401);
+  });
+});
+
+describe('adopting imported picks', () => {
+  it('claims spreadsheet picks on first sign-in, matching the verified email', async () => {
+    // The contest ran in a spreadsheet first, so those picks were imported against
+    // "email:<address>" and have no Google subject to key on.
+    mockQuery
+      .mockResolvedValueOnce(rows([{ n: 99 }]))  // 99 rows waiting to be claimed
+      .mockResolvedValueOnce(rows([]))           // UPDATE
+      .mockResolvedValueOnce(rows([]))           // DELETE leftover picks
+      .mockResolvedValueOnce(rows([]))           // DELETE provisional user
+      .mockResolvedValueOnce(rows([]));          // the actual /me query
+
+    const { status } = await call('/api/pickem/me?season=2026', signedIn);
+    expect(status).toBe(200);
+
+    const update = sentQueries().find((q) => /UPDATE .*picks/s.test(q));
+    expect(update).toBeDefined();
+    // pick_id embeds the user, so taking ownership must rewrite both.
+    expect(update).toMatch(/pick_id = CONCAT/);
+    expect(sentParamsFor(/UPDATE .*picks/s).provisional)
+      .toBe('email:picker@example.invalid');
+  });
+
+  it('does nothing when there is nothing to claim', async () => {
+    mockQuery
+      .mockResolvedValueOnce(rows([{ n: 0 }]))
+      .mockResolvedValueOnce(rows([]));
+    await call('/api/pickem/me?season=2026', signedIn);
+    expect(sentQueries().some((q) => /UPDATE .*picks/s.test(q))).toBe(false);
   });
 });
