@@ -12,41 +12,16 @@ import { Request, Response } from 'express';
 import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
-import { getFootballSport, FootballSportConfig } from '../config/football.config';
+import { FootballSportConfig, datasetFor } from '../config/football.config';
+import { getColumnCatalog, resolveColumns } from '../config/football-columns.config';
+import {
+  resolveSport,
+  normalizeRow,
+  isMissingTable,
+} from '../utils/football-request';
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 const bigquery = new BigQuery({ projectId: PROJECT });
-
-// Sortable player columns, allow-listed because BigQuery cannot parameterize an
-// ORDER BY identifier and the value arrives from the query string.
-const NFL_PLAYER_SORT_FIELDS = [
-  'passing_yards', 'passing_tds', 'passing_epa', 'passing_interceptions',
-  'completions', 'attempts', 'rushing_yards', 'rushing_tds', 'carries',
-  'rushing_epa', 'receiving_yards', 'receiving_tds', 'receptions', 'targets',
-  'receiving_epa', 'def_sacks', 'def_tackles_solo', 'def_interceptions',
-  'def_pass_defended', 'games',
-];
-
-function resolveSport(req: Request, res: Response): FootballSportConfig | null {
-  const key = (req.params.sport || 'nfl').toLowerCase();
-  const sport = getFootballSport(key);
-  if (!sport) {
-    res.status(404).json({
-      success: false,
-      error: { code: 'UNKNOWN_SPORT', message: `Unknown football sport: ${key}` },
-    });
-    return null;
-  }
-  return sport;
-}
-
-function normalizeRow(row: any): any {
-  return {
-    ...row,
-    game_date: normalizeBigQueryTemporalValue(row.game_date),
-    predicted_at: normalizeBigQueryTemporalValue(row.predicted_at),
-  };
-}
 
 /** GET /api/football/:sport/predictions?season=&week=&team=&tier=&division= */
 export async function getPredictions(req: Request, res: Response): Promise<void> {
@@ -93,6 +68,30 @@ export async function getPredictions(req: Request, res: Response): Promise<void>
   }
 }
 
+/**
+ * A prediction-row source that always exposes `spread_line`.
+ *
+ * The join is deduplicated to one row per game. A game carries one line per sportsbook,
+ * and the ingest already collapses providers to a median — but joining without a
+ * guarantee of uniqueness would silently multiply prediction rows and corrupt every
+ * average while still returning success, so the constraint is asserted here too.
+ */
+function predictionSource(sport: FootballSportConfig): string {
+  const preds = `\`${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}\``;
+  if (!sport.linesTable) return `SELECT * FROM ${preds}`;
+
+  const lines = `\`${PROJECT}.${datasetFor(sport, sport.linesDataset)}.`
+    + `${sport.linesTable}\``;
+  return `
+    SELECT p.*, l.spread_line
+    FROM ${preds} p
+    LEFT JOIN (
+      SELECT game_id, ANY_VALUE(spread_line) AS spread_line
+      FROM ${lines}
+      GROUP BY game_id
+    ) l USING (game_id)`;
+}
+
 /** GET /api/football/:sport/predictions/accuracy?season=&division= */
 export async function getAccuracy(req: Request, res: Response): Promise<void> {
   const sport = resolveSport(req, res);
@@ -109,12 +108,18 @@ export async function getAccuracy(req: Request, res: Response): Promise<void> {
       params.division = division;
     }
 
-    // Vegas baseline only exists where a spread was stored (NFL); CFB's free feed
-    // carries no lines, so the column is absent and the baseline comes back null.
-    const vegasExpr = sport.key === 'nfl'
-      ? `AVG(CASE WHEN spread_line IS NOT NULL AND spread_line != 0
-                  THEN IF((spread_line > 0) = (home_won = 1), 1.0, 0.0) END)`
-      : 'CAST(NULL AS FLOAT64)';
+    // One expression for every sport. Where a sport keeps its spread on the prediction
+    // row (the NFL, because nflverse ships it with the schedule) the source is the
+    // table itself; where the lines come from a separate feed (college) the source is a
+    // join. Either way `spread_line` is present and positive means the home side is
+    // favoured, so the scoring expression below stops caring which sport it is.
+    //
+    // This replaced a `sport.key === 'nfl'` test that hardcoded CAST(NULL) for college,
+    // which is why the site's Vegas bar was NFL-only.
+    const source = predictionSource(sport);
+
+    const vegasExpr = `AVG(CASE WHEN spread_line IS NOT NULL AND spread_line != 0
+                  THEN IF((spread_line > 0) = (home_won = 1), 1.0, 0.0) END)`;
 
     const sql = `
       SELECT
@@ -125,7 +130,7 @@ export async function getAccuracy(req: Request, res: Response): Promise<void> {
                IF((elo_home_win_prob > 0.5) = (home_won = 1), 1.0, 0.0)))
                                                      AS elo_accuracy,
         ${vegasExpr}                                 AS vegas_accuracy
-      FROM \`${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}\`
+      FROM (${source})
       WHERE season = @season AND prediction_correct IS NOT NULL ${extra.join(' ')}
     `;
 
@@ -144,8 +149,32 @@ export async function getAccuracy(req: Request, res: Response): Promise<void> {
     res.json({
       success: true,
       data: { sport: sport.key, season, division: division || null, overall, by_tier: tiers },
+      meta: {
+        sport: sport.key,
+        // False where the sport stores no lines at all, so the UI can say the bar is
+        // missing rather than silently omitting it.
+        has_vegas: Boolean(sport.linesTable) || sport.key === 'nfl',
+      },
     });
   } catch (error: any) {
+    // A sport whose predictions table has not been built yet is an expected state, not
+    // an outage. Every other football handler already answered that with a note; this
+    // one went straight to 500, so a missing table read as a server error.
+    if (isMissingTable(error)) {
+      logger.warn('football accuracy table unavailable', {
+        sport: sport.key, error: error.message,
+      });
+      res.json({
+        success: true,
+        data: null,
+        meta: {
+          sport: sport.key,
+          label: sport.label,
+          note: `${sport.label} predictions are not built yet.`,
+        },
+      });
+      return;
+    }
     logger.error('football accuracy query failed', {
       sport: sport.key, error: error.message,
     });
@@ -162,12 +191,22 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
   if (!sport) return;
 
   if (!sport.statsTable) {
+    // Says what IS available rather than only what is not. The old wording — "no
+    // per-team advanced stats feed for this sport yet" — was already false: college
+    // season totals were sitting in BigQuery the whole time, just unreachable.
+    const seasonPath = sport.teamSeasonTable
+      ? `/api/football/${sport.key}/stats/teams/season`
+      : null;
     res.json({
       success: true,
       data: [],
       meta: {
-        sport: sport.key, total: 0, count: 0, sortable_fields: [],
-        note: 'No per-team advanced stats feed for this sport yet.',
+        sport: sport.key, label: sport.label, scope: 'week',
+        total: 0, count: 0, sortable_fields: [],
+        season_endpoint: seasonPath,
+        note: seasonPath
+          ? `${sport.label} has no per-week feed yet — season totals are at ${seasonPath}.`
+          : `${sport.label} has no per-week stats feed yet.`,
       },
     });
     return;
@@ -198,16 +237,55 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
       offset: parseInt(offset, 10) || 0,
     };
 
+    const physical = (key: string) => (sport.statsFieldMap || {})[key] || key;
+
     if (season) { filters.push('season = @season'); params.season = parseInt(season, 10); }
     if (week) { filters.push('week = @week'); params.week = parseInt(week, 10); }
-    if (team) { filters.push('team = @team'); params.team = team.toUpperCase(); }
-    if (search) { filters.push('LOWER(team) LIKE @search'); params.search = `%${search.toLowerCase()}%`; }
+    if (team) {
+      // College team names are full display names ("Ohio State Buckeyes"); NFL are
+      // abbreviations. Matching case-insensitively on a prefix serves both without the
+      // caller needing to know which convention a sport uses.
+      filters.push(`LOWER(\`${physical('team')}\`) LIKE @team`);
+      params.team = `${team.toLowerCase()}%`;
+    }
+    if (search) {
+      filters.push(`LOWER(\`${physical('team')}\`) LIKE @search`);
+      params.search = `%${search.toLowerCase()}%`;
+    }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-    const table = `\`${PROJECT}.${sport.histDataset}.${sport.statsTable}\``;
+    const table =
+      `\`${PROJECT}.${datasetFor(sport, sport.statsDataset)}.${sport.statsTable}\``;
+
+    // Projected from the catalog rather than SELECT *. This table is only 17 columns,
+    // so the win is not payload size — it is that both stats endpoints now describe
+    // what they returned in meta.columns, and the client renders from that instead of
+    // hardcoding one sport's column names.
+    const catalog = getColumnCatalog(sport.statsColumnCatalog);
+    const projection = catalog ? catalog.columns : [];
+    const fieldMap = sport.statsFieldMap || {};
+
+    // Physical column AS canonical name. This is the whole mechanism that lets one
+    // client table render both sports: the NFL table stores per-play EPA and the
+    // college one stores PPA, and the alias reconciles them here rather than in the UI.
+    const select = projection.length
+      ? projection
+        .map((c) => {
+          const physical = fieldMap[c.key] || c.key;
+          return physical === c.key
+            ? `\`${c.key}\``
+            : `\`${physical}\` AS \`${c.key}\``;
+        })
+        .join(', ')
+      : '*';
+
+    // ORDER BY has to name the physical column; the allow-list validated the canonical
+    // one, so the interpolated value is still never caller-controlled.
+    const sortColumn = fieldMap[sort] || sort;
 
     const [rows] = await bigquery.query({
-      query: `SELECT * FROM ${table} ${where} ORDER BY ${sort} ${dir} LIMIT @limit OFFSET @offset`,
+      query: `SELECT ${select} FROM ${table} ${where} `
+        + `ORDER BY \`${sortColumn}\` ${dir} LIMIT @limit OFFSET @offset`,
       params,
     });
     const [[{ total }]] = await bigquery.query({
@@ -219,9 +297,28 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
       success: true,
       data: rows,
       meta: {
-        sport: sport.key, total, count: rows.length,
+        sport: sport.key, label: sport.label, scope: 'week',
+        total, count: rows.length,
         limit: params.limit, offset: params.offset, sort, direction: dir,
         sortable_fields: sport.sortableStatFields,
+        groups: catalog
+          ? catalog.groups.map((gr) => ({
+              key: gr.key,
+              label: gr.label,
+              count: catalog.columns.filter((c) => c.group === gr.key).length,
+            }))
+          : [],
+        columns: projection.map((c) => ({
+          key: c.key,
+          label: c.label,
+          group: c.group,
+          format: c.format,
+          higher_is_better: c.higherIsBetter ?? null,
+          opponent: c.opponent ?? false,
+        })),
+        season_endpoint: sport.teamSeasonTable
+          ? `/api/football/${sport.key}/stats/teams/season`
+          : null,
       },
     });
   } catch (error: any) {
@@ -317,7 +414,9 @@ export async function getLeaders(req: Request, res: Response): Promise<void> {
     }
 
     const category = (req.query.category as string) || '';
-    const limit = Math.min(parseInt((req.query.limit as string) || '400', 10), 500);
+    // Default sized to hold every board: college now publishes 17 categories at 25
+    // deep, which is 425 rows and overflowed the old 400.
+    const limit = Math.min(parseInt((req.query.limit as string) || '600', 10), 1200);
 
     const filters = ['season = @season'];
     const params: Record<string, any> = { season, limit };
@@ -335,11 +434,28 @@ export async function getLeaders(req: Request, res: Response): Promise<void> {
       params,
     });
 
-    const categories = Array.from(
-      new Map(
-        rows.map((r: any) => [r.category, r.category_label])
-      ).entries()
-    ).map(([key, label]) => ({ key, label }));
+    // Derived from a DISTINCT rather than from the rows just returned. Building the
+    // client's category tabs out of a limited page means a truncating limit silently
+    // drops whole boards from the UI, which is a bug that looks like missing data.
+    const [categoryRows] = await bigquery.query({
+      query: `SELECT DISTINCT category, category_label,
+                     ANY_VALUE(higher_is_better) AS higher_is_better,
+                     ANY_VALUE(qualifier) AS qualifier
+              FROM \`${table}\`
+              WHERE season = @season
+              GROUP BY category, category_label
+              ORDER BY category_label`,
+      params: { season },
+    });
+
+    const categories = categoryRows.map((r: any) => ({
+      key: r.category,
+      label: r.category_label,
+      higher_is_better: r.higher_is_better ?? null,
+      // Present where a board has a volume floor, so a short board can explain itself
+      // rather than looking broken.
+      qualifier: r.qualifier ?? null,
+    }));
 
     res.json({
       success: true,
@@ -347,7 +463,7 @@ export async function getLeaders(req: Request, res: Response): Promise<void> {
       meta: { sport: sport.key, season, count: rows.length, categories },
     });
   } catch (error: any) {
-    if (/not found|does not exist/i.test(error?.message || '')) {
+    if (isMissingTable(error)) {
       res.json({
         success: true,
         data: [],
@@ -404,16 +520,24 @@ export async function searchPlayers(req: Request, res: Response): Promise<void> 
     const offset = Math.max(parseInt((req.query.offset as string) || '0', 10), 0);
 
     // Sort is interpolated, not parameterized — BigQuery cannot bind an identifier — so
-    // it is checked against an allow-list. Never pass the raw value through.
-    const requested = (req.query.sort as string) || 'passing_yards';
-    const sort = NFL_PLAYER_SORT_FIELDS.includes(requested) ? requested : 'passing_yards';
+    // it is checked against the sport's allow-list. Never pass the raw value through.
+    const allowedSort = sport.playerSortFields;
+    const requested = (req.query.sort as string) || allowedSort[0];
+    const sort = allowedSort.includes(requested) ? requested : allowedSort[0];
     const dir = ((req.query.direction as string) || 'desc').toLowerCase() === 'asc'
       ? 'ASC' : 'DESC';
+
+    // The two sports name their identity columns differently — nflverse calls them
+    // player_display_name and recent_team, the college pivot calls them player_name and
+    // team — so the filters resolve through the sport's map rather than hardcoding one.
+    const pf = sport.playerFieldMap || {};
+    const nameCol = pf.player_name || 'player_name';
+    const teamCol = pf.team || 'team';
 
     const filters = ['season = @season'];
     const params: Record<string, any> = { season, limit, offset };
     if (search) {
-      filters.push('UPPER(player_display_name) LIKE @search');
+      filters.push(`UPPER(\`${nameCol}\`) LIKE @search`);
       params.search = `%${search.toUpperCase()}%`;
     }
     if (position) {
@@ -421,16 +545,41 @@ export async function searchPlayers(req: Request, res: Response): Promise<void> 
       params.position = position.toUpperCase();
     }
     if (team) {
-      filters.push('UPPER(recent_team) = @team');
-      params.team = team.toUpperCase();
+      filters.push(`UPPER(\`${teamCol}\`) LIKE @team`);
+      params.team = `${team.toUpperCase()}%`;
     }
 
     const table = `${PROJECT}.${sport.seasonDataset}.${sport.playerTable}`;
     const where = `WHERE ${filters.join(' AND ')}`;
 
+    const catalog = getColumnCatalog(sport.playerColumnCatalog);
+    // Same group/fields narrowing as the team endpoints: the NFL table is 148 columns
+    // wide, so a default that sends all of them would be the site's heaviest response.
+    const resolved = catalog
+      ? resolveColumns(catalog, {
+        fields: req.query.fields as string,
+        group: req.query.group as string,
+      })
+      : { columns: [], unknown: [] as string[] };
+
+    // The sort column has to be in the projection for BigQuery to order by it.
+    const picked = new Map(resolved.columns.map((c) => [c.key, c]));
+    if (catalog && !picked.has(sort)) {
+      const spec = catalog.columns.find((c) => c.key === sort);
+      if (spec) picked.set(sort, spec);
+    }
+    const projectionCols = [...picked.values()];
+
+    const projection = projectionCols.length
+      ? projectionCols.map((c) => {
+        const phys = pf[c.key] || c.key;
+        return phys === c.key ? `\`${c.key}\`` : `\`${phys}\` AS \`${c.key}\``;
+      }).join(', ')
+      : '*';
+
     const [rows] = await bigquery.query({
-      query: `SELECT * FROM \`${table}\` ${where}
-              ORDER BY ${sort} ${dir} NULLS LAST
+      query: `SELECT ${projection} FROM \`${table}\` ${where}
+              ORDER BY \`${pf[sort] || sort}\` ${dir} NULLS LAST
               LIMIT @limit OFFSET @offset`,
       params,
     });
@@ -451,11 +600,25 @@ export async function searchPlayers(req: Request, res: Response): Promise<void> 
         offset,
         sort,
         direction: dir,
-        sortable_fields: NFL_PLAYER_SORT_FIELDS,
+        sortable_fields: allowedSort,
+        columns: projectionCols.map((c) => ({
+          key: c.key, label: c.label, group: c.group, format: c.format,
+          higher_is_better: c.higherIsBetter ?? null,
+          opponent: c.opponent ?? false,
+        })),
+        groups: catalog
+          ? catalog.groups.map((gr) => ({
+            key: gr.key,
+            label: gr.label,
+            count: catalog.columns.filter((c) => c.group === gr.key).length,
+          }))
+          : [],
+        group: req.query.fields ? null : ((req.query.group as string) || 'core'),
+        ...(resolved.unknown.length ? { unknown_fields: resolved.unknown } : {}),
       },
     });
   } catch (error: any) {
-    if (/not found|does not exist/i.test(error?.message || '')) {
+    if (isMissingTable(error)) {
       res.json({
         success: true,
         data: [],
@@ -516,10 +679,14 @@ export async function getDiagnostics(req: Request, res: Response): Promise<void>
     if (fromWeek) { filters.push('week >= @fromWeek'); params.fromWeek = parseInt(fromWeek, 10); }
     if (toWeek) { filters.push('week <= @toWeek'); params.toWeek = parseInt(toWeek, 10); }
 
-    const table = `${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}`;
+    // Same source as the accuracy endpoint, so spread_line is present for both sports
+    // and the "against the closing line" panel works for college too. The subquery
+    // guarantees one row per game — a naive join on a per-sportsbook lines table would
+    // multiply these rows and corrupt every aggregate while still returning success,
+    // and at LIMIT 6000 against ~3,500 college predictions there is no headroom for it.
     const sql = `
       SELECT *
-      FROM \`${table}\`
+      FROM (${predictionSource(sport)})
       WHERE ${filters.join(' AND ')}
       ORDER BY season, week, game_date
       LIMIT 6000
@@ -589,7 +756,7 @@ export async function getDiagnostics(req: Request, res: Response): Promise<void>
       },
     });
   } catch (error: any) {
-    if (/not found|does not exist/i.test(error?.message || '')) {
+    if (isMissingTable(error)) {
       res.json({
         success: true,
         diagnostics: [],
