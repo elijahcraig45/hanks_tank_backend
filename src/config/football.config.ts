@@ -59,6 +59,15 @@ export interface FootballSportConfig {
    * say which teams are missing rather than showing an unexplained short table.
    */
   teamSeasonCoverage?: string;
+  /**
+   * Betting lines, joined on game_id to score the Vegas baseline.
+   *
+   * Null where the sport stores its spread on the prediction row instead — the NFL
+   * pipeline writes spread_line directly, because nflverse supplies it with the
+   * schedule. College needs a join because its lines come from a separate feed.
+   */
+  linesTable: string | null;
+  linesDataset: DatasetKind;
   /** Team metadata: abbreviations, colours, logos. */
   teamsTable: string | null;
   teamsDataset: DatasetKind;
@@ -150,6 +159,10 @@ export const FOOTBALL_SPORTS: Record<string, FootballSportConfig> = {
     teamSeasonTable: null,
     teamSeasonDataset: 'season',
     teamSeasonColumnCatalog: null,
+    // nflverse ships spread_line on the schedule, so it is already a column on
+    // nfl_season.game_predictions and needs no join.
+    linesTable: null,
+    linesDataset: 'season',
     teamsTable: 'teams',
     teamsDataset: 'hist',
     playerTable: 'player_season_stats',
@@ -212,6 +225,8 @@ export const FOOTBALL_SPORTS: Record<string, FootballSportConfig> = {
     teamSeasonColumnCatalog: 'cfb_team_season',
     teamSeasonCoverage: 'FBS only — the public feed does not publish an FCS season '
       + 'table, so FCS teams have no row here.',
+    linesTable: 'betting_lines',
+    linesDataset: 'season',
     // CFB has no team metadata table yet, so no logos or colours for college.
     teamsTable: null,
     teamsDataset: 'hist',

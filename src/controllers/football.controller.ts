@@ -68,6 +68,30 @@ export async function getPredictions(req: Request, res: Response): Promise<void>
   }
 }
 
+/**
+ * A prediction-row source that always exposes `spread_line`.
+ *
+ * The join is deduplicated to one row per game. A game carries one line per sportsbook,
+ * and the ingest already collapses providers to a median — but joining without a
+ * guarantee of uniqueness would silently multiply prediction rows and corrupt every
+ * average while still returning success, so the constraint is asserted here too.
+ */
+function predictionSource(sport: FootballSportConfig): string {
+  const preds = `\`${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}\``;
+  if (!sport.linesTable) return `SELECT * FROM ${preds}`;
+
+  const lines = `\`${PROJECT}.${datasetFor(sport, sport.linesDataset)}.`
+    + `${sport.linesTable}\``;
+  return `
+    SELECT p.*, l.spread_line
+    FROM ${preds} p
+    LEFT JOIN (
+      SELECT game_id, ANY_VALUE(spread_line) AS spread_line
+      FROM ${lines}
+      GROUP BY game_id
+    ) l USING (game_id)`;
+}
+
 /** GET /api/football/:sport/predictions/accuracy?season=&division= */
 export async function getAccuracy(req: Request, res: Response): Promise<void> {
   const sport = resolveSport(req, res);
@@ -84,12 +108,18 @@ export async function getAccuracy(req: Request, res: Response): Promise<void> {
       params.division = division;
     }
 
-    // Vegas baseline only exists where a spread was stored (NFL); CFB's free feed
-    // carries no lines, so the column is absent and the baseline comes back null.
-    const vegasExpr = sport.key === 'nfl'
-      ? `AVG(CASE WHEN spread_line IS NOT NULL AND spread_line != 0
-                  THEN IF((spread_line > 0) = (home_won = 1), 1.0, 0.0) END)`
-      : 'CAST(NULL AS FLOAT64)';
+    // One expression for every sport. Where a sport keeps its spread on the prediction
+    // row (the NFL, because nflverse ships it with the schedule) the source is the
+    // table itself; where the lines come from a separate feed (college) the source is a
+    // join. Either way `spread_line` is present and positive means the home side is
+    // favoured, so the scoring expression below stops caring which sport it is.
+    //
+    // This replaced a `sport.key === 'nfl'` test that hardcoded CAST(NULL) for college,
+    // which is why the site's Vegas bar was NFL-only.
+    const source = predictionSource(sport);
+
+    const vegasExpr = `AVG(CASE WHEN spread_line IS NOT NULL AND spread_line != 0
+                  THEN IF((spread_line > 0) = (home_won = 1), 1.0, 0.0) END)`;
 
     const sql = `
       SELECT
@@ -100,7 +130,7 @@ export async function getAccuracy(req: Request, res: Response): Promise<void> {
                IF((elo_home_win_prob > 0.5) = (home_won = 1), 1.0, 0.0)))
                                                      AS elo_accuracy,
         ${vegasExpr}                                 AS vegas_accuracy
-      FROM \`${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}\`
+      FROM (${source})
       WHERE season = @season AND prediction_correct IS NOT NULL ${extra.join(' ')}
     `;
 
@@ -119,6 +149,12 @@ export async function getAccuracy(req: Request, res: Response): Promise<void> {
     res.json({
       success: true,
       data: { sport: sport.key, season, division: division || null, overall, by_tier: tiers },
+      meta: {
+        sport: sport.key,
+        // False where the sport stores no lines at all, so the UI can say the bar is
+        // missing rather than silently omitting it.
+        has_vegas: Boolean(sport.linesTable) || sport.key === 'nfl',
+      },
     });
   } catch (error: any) {
     // A sport whose predictions table has not been built yet is an expected state, not
@@ -643,10 +679,14 @@ export async function getDiagnostics(req: Request, res: Response): Promise<void>
     if (fromWeek) { filters.push('week >= @fromWeek'); params.fromWeek = parseInt(fromWeek, 10); }
     if (toWeek) { filters.push('week <= @toWeek'); params.toWeek = parseInt(toWeek, 10); }
 
-    const table = `${PROJECT}.${sport.seasonDataset}.${sport.predictionsTable}`;
+    // Same source as the accuracy endpoint, so spread_line is present for both sports
+    // and the "against the closing line" panel works for college too. The subquery
+    // guarantees one row per game — a naive join on a per-sportsbook lines table would
+    // multiply these rows and corrupt every aggregate while still returning success,
+    // and at LIMIT 6000 against ~3,500 college predictions there is no headroom for it.
     const sql = `
       SELECT *
-      FROM \`${table}\`
+      FROM (${predictionSource(sport)})
       WHERE ${filters.join(' AND ')}
       ORDER BY season, week, game_date
       LIMIT 6000
