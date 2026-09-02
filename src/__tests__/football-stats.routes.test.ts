@@ -182,16 +182,42 @@ describe('GET /:sport/stats/teams/season', () => {
 });
 
 describe('GET /:sport/stats/teams (per week)', () => {
-  it('points at the season endpoint instead of denying college stats exist', async () => {
-    // Regression: this note used to read "No per-team advanced stats feed for this sport
-    // yet" while the college season table was already populated and configured.
-    const { status, body } = await get('/api/football/cfb/stats/teams');
+  it('serves college per-game advanced stats, aliased onto the shared names', async () => {
+    // This used to answer with a note claiming college had no per-team stats feed.
+    // It now serves CollegeFootballData's per-game advanced table, aliased in SQL onto
+    // the same canonical keys the NFL table uses — which is what lets one client table
+    // render both sports.
+    queue(rows([{
+      season: 2025, week: 3, team: 'Ohio State Buckeyes', opponent: 'Ohio',
+      off_epa_play: 0.41, def_epa_play: 0.02,
+    }]), count(3316));
+
+    const { status, body } = await get('/api/football/cfb/stats/teams?season=2025');
     expect(status).toBe(200);
-    expect(body.meta.season_endpoint).toBe(
-      '/api/football/cfb/stats/teams/season',
+    expect(body.meta.scope).toBe('week');
+    expect(body.data[0].off_epa_play).toBe(0.41);
+
+    // The physical column is CFBD's `ppa`; the client only ever sees the canonical key.
+    const sql = sentQueries()[0];
+    expect(sql).toMatch(/`ppa` AS `off_epa_play`/);
+    expect(sql).toMatch(/`opp_ppa` AS `def_epa_play`/);
+  });
+
+  it('orders by the physical column while validating the canonical one', async () => {
+    // The allow-list guards the canonical name; the interpolated identifier is the
+    // physical one, so neither is ever caller-controlled.
+    queue(rows([{ season: 2025, week: 1, team: 'X' }]), count(1));
+    await get('/api/football/cfb/stats/teams?sort=off_epa_play&direction=desc');
+    expect(sentQueries()[0]).toMatch(/ORDER BY `ppa` DESC/);
+  });
+
+  it('still rejects an off-list sort for college', async () => {
+    const { status, body } = await get(
+      '/api/football/cfb/stats/teams?sort=ppa%3B+DROP',
     );
-    expect(body.meta.note).toContain('/api/football/cfb/stats/teams/season');
-    expect(body.meta.note).not.toMatch(/no per-team advanced stats feed/i);
+    expect(status).toBe(400);
+    expect(body.error.code).toBe('INVALID_SORT');
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it('carries the same scope and columns contract as the season endpoint', async () => {

@@ -13,7 +13,7 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
 import { FootballSportConfig, datasetFor } from '../config/football.config';
-import { getColumnCatalog } from '../config/football-columns.config';
+import { getColumnCatalog, resolveColumns } from '../config/football-columns.config';
 import {
   resolveSport,
   normalizeRow,
@@ -22,16 +22,6 @@ import {
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 const bigquery = new BigQuery({ projectId: PROJECT });
-
-// Sortable player columns, allow-listed because BigQuery cannot parameterize an
-// ORDER BY identifier and the value arrives from the query string.
-const NFL_PLAYER_SORT_FIELDS = [
-  'passing_yards', 'passing_tds', 'passing_epa', 'passing_interceptions',
-  'completions', 'attempts', 'rushing_yards', 'rushing_tds', 'carries',
-  'rushing_epa', 'receiving_yards', 'receiving_tds', 'receptions', 'targets',
-  'receiving_epa', 'def_sacks', 'def_tackles_solo', 'def_interceptions',
-  'def_pass_defended', 'games',
-];
 
 /** GET /api/football/:sport/predictions?season=&week=&team=&tier=&division= */
 export async function getPredictions(req: Request, res: Response): Promise<void> {
@@ -211,10 +201,21 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
       offset: parseInt(offset, 10) || 0,
     };
 
+    const physical = (key: string) => (sport.statsFieldMap || {})[key] || key;
+
     if (season) { filters.push('season = @season'); params.season = parseInt(season, 10); }
     if (week) { filters.push('week = @week'); params.week = parseInt(week, 10); }
-    if (team) { filters.push('team = @team'); params.team = team.toUpperCase(); }
-    if (search) { filters.push('LOWER(team) LIKE @search'); params.search = `%${search.toLowerCase()}%`; }
+    if (team) {
+      // College team names are full display names ("Ohio State Buckeyes"); NFL are
+      // abbreviations. Matching case-insensitively on a prefix serves both without the
+      // caller needing to know which convention a sport uses.
+      filters.push(`LOWER(\`${physical('team')}\`) LIKE @team`);
+      params.team = `${team.toLowerCase()}%`;
+    }
+    if (search) {
+      filters.push(`LOWER(\`${physical('team')}\`) LIKE @search`);
+      params.search = `%${search.toLowerCase()}%`;
+    }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const table =
@@ -226,13 +227,29 @@ export async function searchTeamStats(req: Request, res: Response): Promise<void
     // hardcoding one sport's column names.
     const catalog = getColumnCatalog(sport.statsColumnCatalog);
     const projection = catalog ? catalog.columns : [];
+    const fieldMap = sport.statsFieldMap || {};
+
+    // Physical column AS canonical name. This is the whole mechanism that lets one
+    // client table render both sports: the NFL table stores per-play EPA and the
+    // college one stores PPA, and the alias reconciles them here rather than in the UI.
     const select = projection.length
-      ? projection.map((c) => `\`${c.key}\``).join(', ')
+      ? projection
+        .map((c) => {
+          const physical = fieldMap[c.key] || c.key;
+          return physical === c.key
+            ? `\`${c.key}\``
+            : `\`${physical}\` AS \`${c.key}\``;
+        })
+        .join(', ')
       : '*';
+
+    // ORDER BY has to name the physical column; the allow-list validated the canonical
+    // one, so the interpolated value is still never caller-controlled.
+    const sortColumn = fieldMap[sort] || sort;
 
     const [rows] = await bigquery.query({
       query: `SELECT ${select} FROM ${table} ${where} `
-        + `ORDER BY \`${sort}\` ${dir} LIMIT @limit OFFSET @offset`,
+        + `ORDER BY \`${sortColumn}\` ${dir} LIMIT @limit OFFSET @offset`,
       params,
     });
     const [[{ total }]] = await bigquery.query({
@@ -361,7 +378,9 @@ export async function getLeaders(req: Request, res: Response): Promise<void> {
     }
 
     const category = (req.query.category as string) || '';
-    const limit = Math.min(parseInt((req.query.limit as string) || '400', 10), 500);
+    // Default sized to hold every board: college now publishes 17 categories at 25
+    // deep, which is 425 rows and overflowed the old 400.
+    const limit = Math.min(parseInt((req.query.limit as string) || '600', 10), 1200);
 
     const filters = ['season = @season'];
     const params: Record<string, any> = { season, limit };
@@ -379,11 +398,28 @@ export async function getLeaders(req: Request, res: Response): Promise<void> {
       params,
     });
 
-    const categories = Array.from(
-      new Map(
-        rows.map((r: any) => [r.category, r.category_label])
-      ).entries()
-    ).map(([key, label]) => ({ key, label }));
+    // Derived from a DISTINCT rather than from the rows just returned. Building the
+    // client's category tabs out of a limited page means a truncating limit silently
+    // drops whole boards from the UI, which is a bug that looks like missing data.
+    const [categoryRows] = await bigquery.query({
+      query: `SELECT DISTINCT category, category_label,
+                     ANY_VALUE(higher_is_better) AS higher_is_better,
+                     ANY_VALUE(qualifier) AS qualifier
+              FROM \`${table}\`
+              WHERE season = @season
+              GROUP BY category, category_label
+              ORDER BY category_label`,
+      params: { season },
+    });
+
+    const categories = categoryRows.map((r: any) => ({
+      key: r.category,
+      label: r.category_label,
+      higher_is_better: r.higher_is_better ?? null,
+      // Present where a board has a volume floor, so a short board can explain itself
+      // rather than looking broken.
+      qualifier: r.qualifier ?? null,
+    }));
 
     res.json({
       success: true,
@@ -448,16 +484,24 @@ export async function searchPlayers(req: Request, res: Response): Promise<void> 
     const offset = Math.max(parseInt((req.query.offset as string) || '0', 10), 0);
 
     // Sort is interpolated, not parameterized — BigQuery cannot bind an identifier — so
-    // it is checked against an allow-list. Never pass the raw value through.
-    const requested = (req.query.sort as string) || 'passing_yards';
-    const sort = NFL_PLAYER_SORT_FIELDS.includes(requested) ? requested : 'passing_yards';
+    // it is checked against the sport's allow-list. Never pass the raw value through.
+    const allowedSort = sport.playerSortFields;
+    const requested = (req.query.sort as string) || allowedSort[0];
+    const sort = allowedSort.includes(requested) ? requested : allowedSort[0];
     const dir = ((req.query.direction as string) || 'desc').toLowerCase() === 'asc'
       ? 'ASC' : 'DESC';
+
+    // The two sports name their identity columns differently — nflverse calls them
+    // player_display_name and recent_team, the college pivot calls them player_name and
+    // team — so the filters resolve through the sport's map rather than hardcoding one.
+    const pf = sport.playerFieldMap || {};
+    const nameCol = pf.player_name || 'player_name';
+    const teamCol = pf.team || 'team';
 
     const filters = ['season = @season'];
     const params: Record<string, any> = { season, limit, offset };
     if (search) {
-      filters.push('UPPER(player_display_name) LIKE @search');
+      filters.push(`UPPER(\`${nameCol}\`) LIKE @search`);
       params.search = `%${search.toUpperCase()}%`;
     }
     if (position) {
@@ -465,16 +509,41 @@ export async function searchPlayers(req: Request, res: Response): Promise<void> 
       params.position = position.toUpperCase();
     }
     if (team) {
-      filters.push('UPPER(recent_team) = @team');
-      params.team = team.toUpperCase();
+      filters.push(`UPPER(\`${teamCol}\`) LIKE @team`);
+      params.team = `${team.toUpperCase()}%`;
     }
 
     const table = `${PROJECT}.${sport.seasonDataset}.${sport.playerTable}`;
     const where = `WHERE ${filters.join(' AND ')}`;
 
+    const catalog = getColumnCatalog(sport.playerColumnCatalog);
+    // Same group/fields narrowing as the team endpoints: the NFL table is 148 columns
+    // wide, so a default that sends all of them would be the site's heaviest response.
+    const resolved = catalog
+      ? resolveColumns(catalog, {
+        fields: req.query.fields as string,
+        group: req.query.group as string,
+      })
+      : { columns: [], unknown: [] as string[] };
+
+    // The sort column has to be in the projection for BigQuery to order by it.
+    const picked = new Map(resolved.columns.map((c) => [c.key, c]));
+    if (catalog && !picked.has(sort)) {
+      const spec = catalog.columns.find((c) => c.key === sort);
+      if (spec) picked.set(sort, spec);
+    }
+    const projectionCols = [...picked.values()];
+
+    const projection = projectionCols.length
+      ? projectionCols.map((c) => {
+        const phys = pf[c.key] || c.key;
+        return phys === c.key ? `\`${c.key}\`` : `\`${phys}\` AS \`${c.key}\``;
+      }).join(', ')
+      : '*';
+
     const [rows] = await bigquery.query({
-      query: `SELECT * FROM \`${table}\` ${where}
-              ORDER BY ${sort} ${dir} NULLS LAST
+      query: `SELECT ${projection} FROM \`${table}\` ${where}
+              ORDER BY \`${pf[sort] || sort}\` ${dir} NULLS LAST
               LIMIT @limit OFFSET @offset`,
       params,
     });
@@ -495,7 +564,21 @@ export async function searchPlayers(req: Request, res: Response): Promise<void> 
         offset,
         sort,
         direction: dir,
-        sortable_fields: NFL_PLAYER_SORT_FIELDS,
+        sortable_fields: allowedSort,
+        columns: projectionCols.map((c) => ({
+          key: c.key, label: c.label, group: c.group, format: c.format,
+          higher_is_better: c.higherIsBetter ?? null,
+          opponent: c.opponent ?? false,
+        })),
+        groups: catalog
+          ? catalog.groups.map((gr) => ({
+            key: gr.key,
+            label: gr.label,
+            count: catalog.columns.filter((c) => c.group === gr.key).length,
+          }))
+          : [],
+        group: req.query.fields ? null : ((req.query.group as string) || 'core'),
+        ...(resolved.unknown.length ? { unknown_fields: resolved.unknown } : {}),
       },
     });
   } catch (error: any) {
