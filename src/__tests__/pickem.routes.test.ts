@@ -27,6 +27,10 @@ jest.mock('../middleware/auth.middleware', () => {
     ...actual,
     __setConfigured: (v: boolean) => { configured = v; },
     isAuthConfigured: () => configured,
+    // Mocked so the test never reaches real Secret Manager. It passed locally only
+    // because a developer machine has application-default credentials; CI has none,
+    // and a unit test should not be calling a cloud service either way.
+    googleClientId: async () => (configured ? 'test-client-id.apps.googleusercontent.com' : null),
     attachUser: (req: any, _res: any, next: any) => {
       if (req.headers.authorization === 'Bearer good') req.user = USER;
       next();
@@ -102,10 +106,18 @@ describe('GET /config', () => {
     const { status, body } = await call('/api/pickem/config');
     expect(status).toBe(200);
     expect(body.data).toEqual(expect.objectContaining({
-      auth_configured: expect.any(Boolean),
+      auth_configured: true,
+      google_client_id: 'test-client-id.apps.googleusercontent.com',
       sports: ['nfl', 'cfb'],
       pick_types: ['ats', 'su'],
     }));
+  });
+
+  it('reports sign-in unavailable when no client id is configured', async () => {
+    authMock.__setConfigured(false);
+    const { body } = await call('/api/pickem/config');
+    expect(body.data.auth_configured).toBe(false);
+    expect(body.data.google_client_id).toBeNull();
   });
 });
 
