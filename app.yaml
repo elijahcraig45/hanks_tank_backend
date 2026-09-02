@@ -29,6 +29,11 @@ env_variables:
   # Do not commit a literal value here — this file is public.
   NEWS_API_KEY: __NEWS_API_KEY__
   NEWS_API_BASE_URL: https://newsapi.org/v2
+  # Live college scoreboard, schedule and game detail. Substituted at deploy time from
+  # Secret Manager (secret: cfbd-api-key) by scripts/render-app-yaml.sh — the same
+  # secret the ML pipeline's Cloud Function reads, so there is one copy of the key.
+  # Do not commit a literal value here — this file is public.
+  CFBD_API_KEY: __CFBD_API_KEY__
   CORS_ORIGIN: https://hankstank.com,https://www.hankstank.com,https://frontend-dot-hankstank.uc.r.appspot.com,http://localhost:3000,http://localhost:3001
   ML_FUNCTION_URL: https://mlb-2026-daily-pipeline-127033547664.us-central1.run.app
   LINEUP_TASK_QUEUE: lineup-pregame
