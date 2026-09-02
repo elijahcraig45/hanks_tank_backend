@@ -34,6 +34,12 @@ env_variables:
   # (hankstank@appspot), so no deploy needs the value and this public file never sees
   # it. Set CFBD_API_KEY in the environment to override, which is what local dev does.
   CFBD_SECRET_NAME: cfbd-api-key
+  PICKEM_DATASET: pickem
+  # Web OAuth client ID for Google sign-in. Public by design — it identifies the app,
+  # not the user, and the browser needs it to render the sign-in button. It is also the
+  # audience the server verifies ID tokens against, so the two cannot drift apart.
+  # Created once in the Cloud console under APIs & Services > Credentials.
+  GOOGLE_CLIENT_ID: ""
   CORS_ORIGIN: https://hankstank.com,https://www.hankstank.com,https://frontend-dot-hankstank.uc.r.appspot.com,http://localhost:3000,http://localhost:3001
   ML_FUNCTION_URL: https://mlb-2026-daily-pipeline-127033547664.us-central1.run.app
   LINEUP_TASK_QUEUE: lineup-pregame
