@@ -41,14 +41,15 @@ const MAX_PICKS_PER_REQUEST = 100;
 const T = (name: string) => `\`${PROJECT}.${DATASET}.${name}\``;
 
 /**
- * Users whose imported-pick adoption has already been settled on this instance.
+ * Users already registered and adoption-checked on this instance.
  *
- * Adoption is a one-time transfer, but it has to be attempted on the pick sheet too,
- * which is the most-requested endpoint. Remembering who has been checked keeps that to
- * one query per user per instance instead of one per request. In-process and per
- * instance, which is fine: the worst case is a second harmless check elsewhere.
+ * Both jobs are one-time per user but have to run on the pick sheet as well as on the
+ * other endpoints, and the sheet is the most-requested one. Remembering who has been
+ * seen keeps it to one write per user per instance instead of one per request.
+ * In-process and per instance, which is fine: the worst case is a harmless repeat
+ * elsewhere.
  */
-const adoptionChecked = new Set<string>();
+const userSettled = new Set<string>();
 
 function currentSeason(): number {
   const env = parseInt(process.env.CURRENT_SEASON || '', 10);
@@ -135,15 +136,9 @@ export async function getWeekGames(req: Request, res: Response): Promise<void> {
 
     let picks: any[] = [];
     if (req.user) {
-      // Before reading their picks, so a first-time signer-in sees an imported history
-      // on the sheet itself rather than only after visiting another page.
-      try {
-        await adoptImportedPicks(req.user);
-      } catch (error: any) {
-        logger.warn('adoption check failed', {
-          userId: req.user.userId, error: error.message,
-        });
-      }
+      // Before reading their picks, so a first-time signer-in is both named on the
+      // leaderboard and sees an imported history on the sheet itself.
+      await ensureUser(req.user);
 
       const [rows] = await bigquery.query({
         query: `SELECT game_id, pick_type, selected, spread_at_pick, updated_at
@@ -288,8 +283,7 @@ export async function submitPicks(req: Request, res: Response): Promise<void> {
     }
 
     if (accepted.length) {
-      await adoptImportedPicks(user);
-      await upsertUser(user);
+      await ensureUser(user);
       await upsertPicks(accepted);
     }
 
@@ -335,7 +329,7 @@ async function adoptImportedPicks(user: any): Promise<number> {
   // /me — otherwise signing in and going straight to the pick sheet shows nothing until
   // some other request happens to trigger it — and the sheet is the hot path, so the
   // check must not cost a query every time.
-  if (adoptionChecked.has(user.userId)) return 0;
+  if (userSettled.has(user.userId)) return 0;
 
   const provisional = `email:${String(user.email).toLowerCase()}`;
 
@@ -344,10 +338,7 @@ async function adoptImportedPicks(user: any): Promise<number> {
     params: { provisional },
   });
   const pending = Number(existing[0]?.n ?? 0);
-  if (!pending) {
-    adoptionChecked.add(user.userId);
-    return 0;
-  }
+  if (!pending) return 0;
 
   // pick_id embeds the user, so taking ownership has to rewrite both. Rows the real
   // account has already picked are left behind and dropped below.
@@ -373,11 +364,35 @@ async function adoptImportedPicks(user: any): Promise<number> {
     params: { provisional },
   });
 
-  adoptionChecked.add(user.userId);
   logger.info('adopted imported picks', {
     userId: user.userId, provisional, pending,
   });
   return pending;
+}
+
+/**
+ * Register the signed-in user and claim any history imported before they had an account.
+ *
+ * Both must happen wherever a verified identity turns up, not only on submit. Adoption
+ * alone was not enough: someone who signed in and only *read* had their picks
+ * transferred to their Google subject while no users row was ever written, so the public
+ * leaderboard listed them as "Anonymous" — which is exactly what happened the first time
+ * anyone signed in.
+ *
+ * Memoised per user per instance so the sheet does not pay a write on every request.
+ */
+async function ensureUser(user: any): Promise<void> {
+  if (userSettled.has(user.userId)) return;
+  try {
+    await adoptImportedPicks(user);
+    await upsertUser(user);
+    userSettled.add(user.userId);
+  } catch (error: any) {
+    // Not fatal, and deliberately not memoised on failure so the next request retries.
+    logger.warn('could not settle user', {
+      userId: user.userId, error: error.message,
+    });
+  }
 }
 
 /** Record who the leaderboard is naming. Upsert so a renamed account updates. */
@@ -534,11 +549,7 @@ export async function getMyPicks(req: Request, res: Response): Promise<void> {
   const user = req.user!;
   // Also here, not only on submit: someone whose history was imported should see it the
   // first time they look, without having to make a new pick to trigger the transfer.
-  try {
-    await adoptImportedPicks(user);
-  } catch (error: any) {
-    logger.warn('adoption check failed', { userId: user.userId, error: error.message });
-  }
+  await ensureUser(user);
   const sport = String(req.query.sport || '').toLowerCase();
   const season = parseInt(String(req.query.season || ''), 10) || currentSeason();
   const week = parseInt(String(req.query.week || ''), 10);
@@ -616,5 +627,5 @@ export async function getConfig(_req: Request, res: Response): Promise<void> {
 
 /** Test seam: the adoption memo is per-instance and must not leak between tests. */
 export function __resetAdoptionMemo(): void {
-  adoptionChecked.clear();
+  userSettled.clear();
 }
