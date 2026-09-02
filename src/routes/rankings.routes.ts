@@ -6,10 +6,11 @@
  */
 
 import { Router } from 'express';
+import { cacheGet } from '../middleware/responseCache.middleware';
 import { getRankings } from '../controllers/rankings.controller';
 
 const router = Router({ mergeParams: true });
 
-router.get('/:sport', getRankings);
+router.get('/:sport', cacheGet({ ttl: 3600, prefix: 'rank' }), getRankings);
 
 export default router;
