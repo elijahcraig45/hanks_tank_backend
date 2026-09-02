@@ -56,7 +56,9 @@ jest.mock('../middleware/auth.middleware', () => {
   };
 });
 
-import { mockQuery, rows, sentQueries, sentParamsFor } from './helpers/bq-mock';
+import {
+  mockQuery, rows, count, sentQueries, sentParamsFor, routeQueries,
+} from './helpers/bq-mock';
 import pickemRoutes from '../routes/pickem.routes';
 import { __resetAdoptionMemo } from '../controllers/pickem.controller';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -153,14 +155,15 @@ describe('GET /games', () => {
   });
 
   it("merges a signed-in user's own picks into the same response", async () => {
-    mockQuery
-      .mockResolvedValueOnce(rows([game()]))
-      .mockResolvedValueOnce(rows([{ week: 1 }]))
-      .mockResolvedValueOnce(rows([{ n: 0 }]))   // adoption check
-      .mockResolvedValueOnce(rows([{
-        game_id: 'g1', pick_type: 'ats', selected: 'away',
+    routeQueries([
+      [/FROM .*games. WHERE sport/s, rows([game()])],
+      [/DISTINCT week/s, rows([{ week: 1 }])],
+      [/COUNT\(\*\) AS n/s, rows([{ n: 0 }])],
+      [/FROM .*picks.\s+WHERE user_id/s, rows([{
+        game_id: 'g1', pick_type: 'su', selected: 'away',
         spread_at_pick: -2.5, updated_at: { value: '2026-09-01T00:00:00Z' },
-      }]));
+      }])],
+    ]);
     const { body } = await call('/api/pickem/games?sport=nfl&week=1', signedIn);
     expect(body.meta.signed_in).toBe(true);
     expect(body.meta.picks[0]).toEqual(expect.objectContaining({
@@ -323,13 +326,15 @@ describe('GET /leaderboard', () => {
 
 describe('GET /me', () => {
   it('returns a record with pushes and pending counted separately', async () => {
-    mockQuery.mockResolvedValueOnce(rows([{ n: 0 }]));  // adoption check
-    mockQuery.mockResolvedValueOnce(rows([
+    routeQueries([
+      [/COUNT\(\*\) AS n/s, rows([{ n: 0 }])],
+      [/FROM .*graded_picks/s, rows([
       { is_correct: true, is_push: false, kickoff: { value: '2026-09-13T17:00:00Z' } },
       { is_correct: false, is_push: false, kickoff: { value: '2026-09-13T17:00:00Z' } },
       { is_correct: null, is_push: true, kickoff: { value: '2026-09-13T17:00:00Z' } },
       { is_correct: null, is_push: false, kickoff: { value: '2026-09-20T17:00:00Z' } },
-    ]));
+      ])],
+    ]);
     const { status, body } = await call('/api/pickem/me?season=2026', signedIn);
     expect(status).toBe(200);
     // A push is not a loss and an ungraded pick is not a loss either.
@@ -346,12 +351,7 @@ describe('adopting imported picks', () => {
   it('claims spreadsheet picks on first sign-in, matching the verified email', async () => {
     // The contest ran in a spreadsheet first, so those picks were imported against
     // "email:<address>" and have no Google subject to key on.
-    mockQuery
-      .mockResolvedValueOnce(rows([{ n: 99 }]))  // 99 rows waiting to be claimed
-      .mockResolvedValueOnce(rows([]))           // UPDATE
-      .mockResolvedValueOnce(rows([]))           // DELETE leftover picks
-      .mockResolvedValueOnce(rows([]))           // DELETE provisional user
-      .mockResolvedValueOnce(rows([]));          // the actual /me query
+    routeQueries([[/COUNT\(\*\) AS n/s, rows([{ n: 99 }])]]);
 
     const { status } = await call('/api/pickem/me?season=2026', signedIn);
     expect(status).toBe(200);
@@ -377,14 +377,11 @@ describe('adoption on the pick sheet', () => {
   it('claims an imported history on the sheet, not only on /me', async () => {
     // The bug this covers: signing in and going straight to the sheet showed no picks
     // until some other request happened to trigger the transfer.
-    mockQuery
-      .mockResolvedValueOnce(rows([game()]))       // games
-      .mockResolvedValueOnce(rows([{ week: 1 }]))  // weeks
-      .mockResolvedValueOnce(rows([{ n: 42 }]))    // 42 waiting
-      .mockResolvedValueOnce(rows([]))             // UPDATE
-      .mockResolvedValueOnce(rows([]))             // DELETE picks
-      .mockResolvedValueOnce(rows([]))             // DELETE provisional user
-      .mockResolvedValueOnce(rows([]));            // the user's picks
+    routeQueries([
+      [/FROM .*games. WHERE sport/s, rows([game()])],
+      [/DISTINCT week/s, rows([{ week: 1 }])],
+      [/COUNT\(\*\) AS n/s, rows([{ n: 42 }])],
+    ]);
 
     const { status } = await call('/api/pickem/games?sport=nfl&week=1', signedIn);
     expect(status).toBe(200);
@@ -393,18 +390,68 @@ describe('adoption on the pick sheet', () => {
 
   it('checks once per user rather than on every sheet request', async () => {
     // The sheet is the most-requested endpoint; a query per request would be waste.
-    for (let i = 0; i < 3; i += 1) {
-      mockQuery
-        .mockResolvedValueOnce(rows([game()]))
-        .mockResolvedValueOnce(rows([{ week: 1 }]))
-        .mockResolvedValueOnce(rows([{ n: 0 }]))
-        .mockResolvedValueOnce(rows([]));
-    }
+    routeQueries([
+      [/FROM .*games. WHERE sport/s, rows([game()])],
+      [/DISTINCT week/s, rows([{ week: 1 }])],
+      [/COUNT\(\*\) AS n/s, rows([{ n: 0 }])],
+    ]);
     await call('/api/pickem/games?sport=nfl&week=1', signedIn);
     await call('/api/pickem/games?sport=nfl&week=1', signedIn);
     await call('/api/pickem/games?sport=nfl&week=1', signedIn);
 
     const checks = sentQueries().filter((q) => /COUNT\(\*\) AS n[\s\S]*user_id = @provisional/.test(q));
     expect(checks).toHaveLength(1);
+  });
+});
+
+describe('registering the signed-in user', () => {
+  it('writes a users row even for someone who only reads', async () => {
+    // The bug: adoption moved an imported history onto the real Google subject while
+    // no users row was ever written, because that only happened on submit. The public
+    // leaderboard then listed the entrant as "Anonymous".
+    routeQueries([[/COUNT\(\*\) AS n/s, rows([{ n: 0 }])]]);
+
+    const { status } = await call('/api/pickem/me?season=2026', signedIn);
+    expect(status).toBe(200);
+
+    const merge = sentQueries().find((q) => /MERGE .*users/s.test(q));
+    expect(merge).toBeDefined();
+    expect(sentParamsFor(/MERGE .*users/s).displayName).toBe('Picker');
+  });
+
+  it('registers on the pick sheet too, not only on /me', async () => {
+    routeQueries([
+      [/FROM .*games. WHERE sport/s, rows([game()])],
+      [/DISTINCT week/s, rows([{ week: 1 }])],
+      [/COUNT\(\*\) AS n/s, rows([{ n: 0 }])],
+    ]);
+    await call('/api/pickem/games?sport=nfl&week=1', signedIn);
+    expect(sentQueries().some((q) => /MERGE .*users/s.test(q))).toBe(true);
+  });
+
+  it('does not re-register on every request', async () => {
+    routeQueries([[/COUNT\(\*\) AS n/s, rows([{ n: 0 }])]]);
+    await call('/api/pickem/me?season=2026', signedIn);
+    await call('/api/pickem/me?season=2026', signedIn);
+    await call('/api/pickem/me?season=2026', signedIn);
+    expect(sentQueries().filter((q) => /MERGE .*users/s.test(q))).toHaveLength(1);
+  });
+
+  it('retries on the next request if registering failed', async () => {
+    // Deliberately not memoised on failure: a transient error must not leave someone
+    // permanently unnamed on the leaderboard.
+    let failNext = true;
+    routeQueries([
+      [/COUNT\(\*\) AS n/s, rows([{ n: 0 }])],
+      [/MERGE .*users/s, () => {
+        if (failNext) { failNext = false; throw new Error('transient'); }
+        return rows([]);
+      }],
+    ]);
+    await call('/api/pickem/me?season=2026', signedIn);
+    await call('/api/pickem/me?season=2026', signedIn);
+
+    expect(sentQueries().filter((q) => /MERGE .*users/s.test(q)).length)
+      .toBeGreaterThanOrEqual(2);
   });
 });

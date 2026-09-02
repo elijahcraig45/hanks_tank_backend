@@ -67,3 +67,29 @@ export function sentParamsFor(pattern: RegExp): Record<string, any> {
   const call = mockQuery.mock.calls.find((c) => pattern.test(c[0]?.query ?? ''));
   return call?.[0]?.params ?? {};
 }
+
+/**
+ * Route query results by what the SQL looks like, rather than by call order.
+ *
+ * Ordering-based mocks (`mockResolvedValueOnce` chains) break every time a handler gains
+ * a query — a permission check, a migration step, a user registration — even though the
+ * behaviour under test is unchanged. Matching on the SQL means a test only describes the
+ * queries it actually cares about.
+ *
+ * Patterns are tried in order; the first match wins. `fallback` answers anything
+ * unmatched, so an incidental query does not have to be enumerated.
+ */
+export function routeQueries(
+  routes: Array<[RegExp, any]>,
+  fallback: any = [[]],
+): void {
+  mockQuery.mockImplementation(async (opts: any) => {
+    const sql = opts?.query ?? '';
+    for (const [pattern, result] of routes) {
+      if (pattern.test(sql)) {
+        return typeof result === 'function' ? result(opts) : result;
+      }
+    }
+    return fallback;
+  });
+}
