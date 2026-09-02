@@ -38,13 +38,60 @@ declare global {
 }
 
 /**
- * The web OAuth client ID. Both the audience this accepts and the ID the browser signs
- * in with, so they cannot drift apart.
+ * The web OAuth client ID: both the audience this verifies against and the ID the
+ * browser signs in with, so the two cannot drift apart.
+ *
+ * Resolved from the environment first, then from Secret Manager. The second path exists
+ * so adding sign-in needs no code change and no redeploy — create the OAuth client in
+ * the console, store the id, and the next instance picks it up. It is not a secret (it
+ * identifies the app, not a user, and the browser must have it), but Secret Manager is
+ * the one config store this project already reads at runtime.
  */
-export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const CLIENT_ID_SECRET = process.env.GOOGLE_CLIENT_ID_SECRET || 'google-oauth-client-id';
+const SECRET_PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 
-export function isAuthConfigured(): boolean {
-  return Boolean(GOOGLE_CLIENT_ID);
+let clientId: string | null | undefined;
+let clientIdLoad: Promise<string | null> | null = null;
+
+async function loadClientId(): Promise<string | null> {
+  const fromEnv = (process.env.GOOGLE_CLIENT_ID || '').trim();
+  if (fromEnv) return fromEnv;
+
+  try {
+    const { SecretManagerServiceClient } =
+      await import('@google-cloud/secret-manager');
+    const sm = new SecretManagerServiceClient();
+    const [version] = await sm.accessSecretVersion({
+      name: `projects/${SECRET_PROJECT}/secrets/${CLIENT_ID_SECRET}/versions/latest`,
+    });
+    const value = version.payload?.data?.toString().trim() || null;
+    if (value) logger.info('Google client ID loaded from Secret Manager');
+    return value;
+  } catch (error: any) {
+    // Expected until sign-in is set up. Every read endpoint still works; the writes
+    // answer AUTH_NOT_CONFIGURED, which says whose problem it is.
+    logger.info('no Google client ID configured', { error: error?.message?.slice(0, 120) });
+    return null;
+  }
+}
+
+/** Resolve once per instance. */
+export async function googleClientId(): Promise<string | null> {
+  if (clientId === undefined) {
+    clientIdLoad = clientIdLoad || loadClientId();
+    clientId = await clientIdLoad;
+  }
+  return clientId;
+}
+
+export async function isAuthConfigured(): Promise<boolean> {
+  return Boolean(await googleClientId());
+}
+
+/** Test seam. */
+export function __resetClientId(): void {
+  clientId = undefined;
+  clientIdLoad = null;
 }
 
 const client = new OAuth2Client();
@@ -71,7 +118,8 @@ function bearer(req: Request): string | null {
  * whether an anonymous request is an error or merely a reader.
  */
 export async function verifyToken(token: string): Promise<AuthUser | null> {
-  if (!GOOGLE_CLIENT_ID) return null;
+  const audience = await googleClientId();
+  if (!audience) return null;
 
   prune();
   const hit = verified.get(token);
@@ -80,7 +128,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
   try {
     const ticket = await client.verifyIdToken({
       idToken: token,
-      audience: GOOGLE_CLIENT_ID,
+      audience,
     });
     const payload = ticket.getPayload();
     if (!payload?.sub) return null;
@@ -134,7 +182,7 @@ export async function attachUser(
 export async function requireUser(
   req: Request, res: Response, next: NextFunction,
 ): Promise<void> {
-  if (!isAuthConfigured()) {
+  if (!(await isAuthConfigured())) {
     // Distinguished from a bad token on purpose: this is the server's fault, not the
     // caller's, and the message says which so nobody debugs the wrong end.
     res.status(503).json({
