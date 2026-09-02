@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@google-cloud/bigquery": "^7.9.4",
+    "@google-cloud/secret-manager": "^7.0.0",
     "@google-cloud/storage": "^7.17.0",
     "@google-cloud/tasks": "^6.2.1",
     "@types/node-cron": "^3.0.11",

@@ -74,29 +74,67 @@ export function completedTTL(base: number, isCompleted: boolean): number {
 }
 
 let cachedKey: string | null | undefined;
+let keyLoad: Promise<string | null> | null = null;
+
+const SECRET_NAME = process.env.CFBD_SECRET_NAME || 'cfbd-api-key';
+const SECRET_PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 
 /**
- * Resolve the key once per instance. Lazy on purpose: importing this module must not
- * require a key, so that the NFL paths and every batch endpoint keep working without one.
+ * Resolve the key from Secret Manager, once per instance.
+ *
+ * Read at runtime rather than injected at deploy time, and that is the point: App
+ * Engine already runs as the service account that holds secretAccessor on this secret,
+ * so nothing about deploying needs to know the key. Injecting it would have made every
+ * deploy — including CI's — depend on whoever ran it having the value to hand, which is
+ * the opposite of autonomous.
+ *
+ * The promise is memoised so a burst of first requests on a cold instance makes one
+ * Secret Manager call rather than one each.
  */
-function apiKey(): string {
-  if (cachedKey === undefined) {
-    cachedKey = process.env.CFBD_API_KEY || null;
-    if (!cachedKey) {
-      logger.warn('CFBD_API_KEY not set — live college endpoints will report unavailable');
+async function loadKey(): Promise<string | null> {
+  // An explicit env var still wins, which is what local development uses.
+  if (process.env.CFBD_API_KEY) return process.env.CFBD_API_KEY.trim();
+
+  try {
+    const { SecretManagerServiceClient } =
+      await import('@google-cloud/secret-manager');
+    const client = new SecretManagerServiceClient();
+    const [version] = await client.accessSecretVersion({
+      name: `projects/${SECRET_PROJECT}/secrets/${SECRET_NAME}/versions/latest`,
+    });
+    const value = version.payload?.data?.toString().trim() || null;
+    if (value) {
+      logger.info('CFBD key loaded from Secret Manager', { secret: SECRET_NAME });
     }
+    return value;
+  } catch (error: any) {
+    // Not fatal. Every college live endpoint answers "unavailable" with a note, and
+    // nothing that reads BigQuery is affected.
+    logger.warn('could not load the CFBD key from Secret Manager', {
+      secret: SECRET_NAME, error: error?.message,
+    });
+    return null;
+  }
+}
+
+async function apiKey(): Promise<string> {
+  if (cachedKey === undefined) {
+    keyLoad = keyLoad || loadKey();
+    cachedKey = await keyLoad;
   }
   if (!cachedKey) throw new CfbdKeyMissing();
   return cachedKey;
 }
 
-export function hasApiKey(): boolean {
-  try { apiKey(); return true; } catch { return false; }
+/** Whether a key is available. Resolves it if that has not happened yet. */
+export async function hasApiKey(): Promise<boolean> {
+  try { await apiKey(); return true; } catch { return false; }
 }
 
 /** Test seam. */
 export function __resetKeyCache(): void {
   cachedKey = undefined;
+  keyLoad = null;
 }
 
 function buildUrl(path: string, params: Record<string, any>): string {
@@ -120,7 +158,7 @@ export async function cfbdGet<T = any>(
   params: Record<string, any> = {},
   ttl = 60,
 ): Promise<T> {
-  const key = apiKey();
+  const key = await apiKey();
   const cacheKey = getCacheKey(`cfbd:${path}`, params);
 
   try {
