@@ -24,6 +24,7 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
 import { isMissingTable } from '../utils/football-request';
+import { googleClientId } from '../middleware/auth.middleware';
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 const DATASET = process.env.PICKEM_DATASET || 'pickem';
@@ -554,13 +555,20 @@ export async function getMyPicks(req: Request, res: Response): Promise<void> {
   }
 }
 
-/** GET /api/pickem/config — what the browser needs to render a sign-in button. */
-export function getConfig(_req: Request, res: Response): void {
+/**
+ * GET /api/pickem/config — what the browser needs to render a sign-in button.
+ *
+ * The client ID is served from here rather than baked into the bundle so the browser
+ * and the server that verifies the token can never disagree about which app is asking,
+ * and so enabling sign-in needs no frontend rebuild.
+ */
+export async function getConfig(_req: Request, res: Response): Promise<void> {
+  const clientId = await googleClientId();
   res.json({
     success: true,
     data: {
-      google_client_id: process.env.GOOGLE_CLIENT_ID || null,
-      auth_configured: Boolean(process.env.GOOGLE_CLIENT_ID),
+      google_client_id: clientId,
+      auth_configured: Boolean(clientId),
       season: currentSeason(),
       sports: ['nfl', 'cfb'],
       pick_types: ['ats', 'su'],
