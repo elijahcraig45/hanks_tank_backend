@@ -259,6 +259,7 @@ export async function submitPicks(req: Request, res: Response): Promise<void> {
     }
 
     if (accepted.length) {
+      await adoptImportedPicks(user);
       await upsertUser(user);
       await upsertPicks(accepted);
     }
@@ -281,6 +282,63 @@ export async function submitPicks(req: Request, res: Response): Promise<void> {
       error: { code: 'PICKEM_SUBMIT_ERROR', message: 'Failed to save picks' },
     });
   }
+}
+
+/**
+ * Adopt picks imported before this person had ever signed in.
+ *
+ * The contest ran in a spreadsheet first, so those picks predate any Google account and
+ * there was no subject claim to key them on. They were imported against a provisional
+ * id of "email:<address>", and this claims them the first time that person signs in.
+ *
+ * Matching on the email is safe precisely because the token was verified: an ID token
+ * with an unverified email is rejected before it reaches here, so the address is one
+ * Google confirmed the holder controls. Matching on an unverified email would let anyone
+ * claim someone else's history by asserting their address.
+ *
+ * A pick the real account already holds wins over the imported one — the newer,
+ * deliberate pick beats the migrated one — and the provisional rows are then removed so
+ * this is a one-time transfer rather than something that runs forever.
+ */
+async function adoptImportedPicks(user: any): Promise<number> {
+  if (!user.email) return 0;
+  const provisional = `email:${String(user.email).toLowerCase()}`;
+
+  const [existing] = await bigquery.query({
+    query: `SELECT COUNT(*) AS n FROM ${T('picks')} WHERE user_id = @provisional`,
+    params: { provisional },
+  });
+  const pending = Number(existing[0]?.n ?? 0);
+  if (!pending) return 0;
+
+  // pick_id embeds the user, so taking ownership has to rewrite both. Rows the real
+  // account has already picked are left behind and dropped below.
+  await bigquery.query({
+    query: `
+      UPDATE ${T('picks')}
+      SET user_id = @userId,
+          pick_id = CONCAT(@userId, '|', game_id, '|', pick_type),
+          updated_at = CURRENT_TIMESTAMP()
+      WHERE user_id = @provisional
+        AND CONCAT(@userId, '|', game_id, '|', pick_type) NOT IN (
+          SELECT pick_id FROM ${T('picks')} WHERE user_id = @userId
+        )`,
+    params: { userId: user.userId, provisional },
+  });
+
+  await bigquery.query({
+    query: `DELETE FROM ${T('picks')} WHERE user_id = @provisional`,
+    params: { provisional },
+  });
+  await bigquery.query({
+    query: `DELETE FROM ${T('users')} WHERE user_id = @provisional`,
+    params: { provisional },
+  });
+
+  logger.info('adopted imported picks', {
+    userId: user.userId, provisional, pending,
+  });
+  return pending;
 }
 
 /** Record who the leaderboard is naming. Upsert so a renamed account updates. */
@@ -435,6 +493,13 @@ export async function getLeaderboard(req: Request, res: Response): Promise<void>
  */
 export async function getMyPicks(req: Request, res: Response): Promise<void> {
   const user = req.user!;
+  // Also here, not only on submit: someone whose history was imported should see it the
+  // first time they look, without having to make a new pick to trigger the transfer.
+  try {
+    await adoptImportedPicks(user);
+  } catch (error: any) {
+    logger.warn('adoption check failed', { userId: user.userId, error: error.message });
+  }
   const sport = String(req.query.sport || '').toLowerCase();
   const season = parseInt(String(req.query.season || ''), 10) || currentSeason();
   const week = parseInt(String(req.query.week || ''), 10);

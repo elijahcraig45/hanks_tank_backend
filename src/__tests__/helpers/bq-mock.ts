@@ -55,3 +55,15 @@ export function sentQueries(): string[] {
 export function sentParams(n = 0): Record<string, any> {
   return mockQuery.mock.calls[n]?.[0]?.params ?? {};
 }
+
+/**
+ * The params of the first call whose SQL matches `pattern`.
+ *
+ * Preferred over indexing by call position: a handler that gains a query — a
+ * permission check, a migration step — should not break an assertion about a
+ * different one.
+ */
+export function sentParamsFor(pattern: RegExp): Record<string, any> {
+  const call = mockQuery.mock.calls.find((c) => pattern.test(c[0]?.query ?? ''));
+  return call?.[0]?.params ?? {};
+}
