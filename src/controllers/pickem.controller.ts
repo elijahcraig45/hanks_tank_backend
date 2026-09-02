@@ -40,6 +40,16 @@ const MAX_PICKS_PER_REQUEST = 100;
 
 const T = (name: string) => `\`${PROJECT}.${DATASET}.${name}\``;
 
+/**
+ * Users whose imported-pick adoption has already been settled on this instance.
+ *
+ * Adoption is a one-time transfer, but it has to be attempted on the pick sheet too,
+ * which is the most-requested endpoint. Remembering who has been checked keeps that to
+ * one query per user per instance instead of one per request. In-process and per
+ * instance, which is fine: the worst case is a second harmless check elsewhere.
+ */
+const adoptionChecked = new Set<string>();
+
 function currentSeason(): number {
   const env = parseInt(process.env.CURRENT_SEASON || '', 10);
   return Number.isFinite(env) ? env : new Date().getFullYear();
@@ -117,6 +127,16 @@ export async function getWeekGames(req: Request, res: Response): Promise<void> {
 
     let picks: any[] = [];
     if (req.user) {
+      // Before reading their picks, so a first-time signer-in sees an imported history
+      // on the sheet itself rather than only after visiting another page.
+      try {
+        await adoptImportedPicks(req.user);
+      } catch (error: any) {
+        logger.warn('adoption check failed', {
+          userId: req.user.userId, error: error.message,
+        });
+      }
+
       const [rows] = await bigquery.query({
         query: `SELECT game_id, pick_type, selected, spread_at_pick, updated_at
                 FROM ${T('picks')}
@@ -303,6 +323,12 @@ export async function submitPicks(req: Request, res: Response): Promise<void> {
  */
 async function adoptImportedPicks(user: any): Promise<number> {
   if (!user.email) return 0;
+  // Checked once per user per instance. Adoption has to run on the sheet as well as on
+  // /me — otherwise signing in and going straight to the pick sheet shows nothing until
+  // some other request happens to trigger it — and the sheet is the hot path, so the
+  // check must not cost a query every time.
+  if (adoptionChecked.has(user.userId)) return 0;
+
   const provisional = `email:${String(user.email).toLowerCase()}`;
 
   const [existing] = await bigquery.query({
@@ -310,7 +336,10 @@ async function adoptImportedPicks(user: any): Promise<number> {
     params: { provisional },
   });
   const pending = Number(existing[0]?.n ?? 0);
-  if (!pending) return 0;
+  if (!pending) {
+    adoptionChecked.add(user.userId);
+    return 0;
+  }
 
   // pick_id embeds the user, so taking ownership has to rewrite both. Rows the real
   // account has already picked are left behind and dropped below.
@@ -336,6 +365,7 @@ async function adoptImportedPicks(user: any): Promise<number> {
     params: { provisional },
   });
 
+  adoptionChecked.add(user.userId);
   logger.info('adopted imported picks', {
     userId: user.userId, provisional, pending,
   });
@@ -574,4 +604,9 @@ export async function getConfig(_req: Request, res: Response): Promise<void> {
       pick_types: ['ats', 'su'],
     },
   });
+}
+
+/** Test seam: the adoption memo is per-instance and must not leak between tests. */
+export function __resetAdoptionMemo(): void {
+  adoptionChecked.clear();
 }

@@ -54,6 +54,7 @@ jest.mock('../middleware/auth.middleware', () => {
 
 import { mockQuery, rows, sentQueries, sentParamsFor } from './helpers/bq-mock';
 import pickemRoutes from '../routes/pickem.routes';
+import { __resetAdoptionMemo } from '../controllers/pickem.controller';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const authMock = require('../middleware/auth.middleware');
 
@@ -75,6 +76,8 @@ afterAll((done) => { server.close(done); });
 beforeEach(() => {
   jest.clearAllMocks();
   authMock.__setConfigured(true);
+  // The adoption memo is per-instance, so it would otherwise carry between tests.
+  __resetAdoptionMemo();
 });
 
 async function call(path: string, init: any = {}) {
@@ -141,6 +144,7 @@ describe('GET /games', () => {
     mockQuery
       .mockResolvedValueOnce(rows([game()]))
       .mockResolvedValueOnce(rows([{ week: 1 }]))
+      .mockResolvedValueOnce(rows([{ n: 0 }]))   // adoption check
       .mockResolvedValueOnce(rows([{
         game_id: 'g1', pick_type: 'ats', selected: 'away',
         spread_at_pick: -2.5, updated_at: { value: '2026-09-01T00:00:00Z' },
@@ -354,5 +358,41 @@ describe('adopting imported picks', () => {
       .mockResolvedValueOnce(rows([]));
     await call('/api/pickem/me?season=2026', signedIn);
     expect(sentQueries().some((q) => /UPDATE .*picks/s.test(q))).toBe(false);
+  });
+});
+
+describe('adoption on the pick sheet', () => {
+  it('claims an imported history on the sheet, not only on /me', async () => {
+    // The bug this covers: signing in and going straight to the sheet showed no picks
+    // until some other request happened to trigger the transfer.
+    mockQuery
+      .mockResolvedValueOnce(rows([game()]))       // games
+      .mockResolvedValueOnce(rows([{ week: 1 }]))  // weeks
+      .mockResolvedValueOnce(rows([{ n: 42 }]))    // 42 waiting
+      .mockResolvedValueOnce(rows([]))             // UPDATE
+      .mockResolvedValueOnce(rows([]))             // DELETE picks
+      .mockResolvedValueOnce(rows([]))             // DELETE provisional user
+      .mockResolvedValueOnce(rows([]));            // the user's picks
+
+    const { status } = await call('/api/pickem/games?sport=nfl&week=1', signedIn);
+    expect(status).toBe(200);
+    expect(sentQueries().some((q) => /UPDATE .*picks/s.test(q))).toBe(true);
+  });
+
+  it('checks once per user rather than on every sheet request', async () => {
+    // The sheet is the most-requested endpoint; a query per request would be waste.
+    for (let i = 0; i < 3; i += 1) {
+      mockQuery
+        .mockResolvedValueOnce(rows([game()]))
+        .mockResolvedValueOnce(rows([{ week: 1 }]))
+        .mockResolvedValueOnce(rows([{ n: 0 }]))
+        .mockResolvedValueOnce(rows([]));
+    }
+    await call('/api/pickem/games?sport=nfl&week=1', signedIn);
+    await call('/api/pickem/games?sport=nfl&week=1', signedIn);
+    await call('/api/pickem/games?sport=nfl&week=1', signedIn);
+
+    const checks = sentQueries().filter((q) => /COUNT\(\*\) AS n[\s\S]*user_id = @provisional/.test(q));
+    expect(checks).toHaveLength(1);
   });
 });
