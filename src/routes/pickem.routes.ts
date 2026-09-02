@@ -36,9 +36,9 @@ const router = Router();
 // minute — stacking a response cache on top is how sign-in stayed switched off for
 // minutes after the client id was actually added.
 router.get('/config', getConfig);
-router.get('/games', attachUser, cacheGet({ ttl: TTL.games, prefix: 'pk:games' }), getWeekGames);
-router.get('/leaderboard', attachUser, cacheGet({ ttl: TTL.leaderboard, prefix: 'pk:board' }), getLeaderboard);
-router.get('/me', requireUser, cacheGet({ ttl: TTL.me, prefix: 'pk:me' }), getMyPicks);
+router.get('/games', attachUser, cacheGet({ ttl: TTL.games, prefix: 'pk:games', perViewer: true }), getWeekGames);
+router.get('/leaderboard', attachUser, cacheGet({ ttl: TTL.leaderboard, prefix: 'pk:board', perViewer: true }), getLeaderboard);
+router.get('/me', requireUser, cacheGet({ ttl: TTL.me, prefix: 'pk:me', perViewer: true }), getMyPicks);
 router.put('/picks', requireUser, submitPicks);
 
 export default router;

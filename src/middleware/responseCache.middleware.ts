@@ -38,15 +38,37 @@ export interface CacheOptions {
    * Prefix for readable keys. Defaults to the route path, which is usually enough.
    */
   prefix?: string;
+  /**
+   * Set on any route whose body can differ by who is asking.
+   *
+   * This controls what shared caches are allowed to do, which matters here because App
+   * Engine serves through Google's frontend. Such a response is sent `private` so no
+   * shared cache stores it at all, plus `Vary: Authorization` so a signed-in request is
+   * never answered from an entry populated anonymously — that second one is the failure
+   * `private` alone does not cover, since a cache keys on the URL and would otherwise
+   * hand a signed-in visitor the anonymous pick sheet with none of their picks on it.
+   *
+   * The in-process key always carries the viewer regardless of this flag; this is only
+   * about caches between here and the browser.
+   */
+  perViewer?: boolean;
 }
 
-export function cacheGet({ ttl, prefix }: CacheOptions) {
+export function cacheGet({ ttl, prefix, perViewer }: CacheOptions) {
   return async function cacheGetMiddleware(
     req: Request, res: Response, next: NextFunction,
   ): Promise<void> {
     // Only idempotent reads. A PUT that returned a cached body would be a bug with
     // teeth, so this never applies to anything else.
     if (req.method !== 'GET' || ttl <= 0) return next();
+
+    // A route declared per-viewer stays private even for an anonymous caller: the URL
+    // is the same either way, so letting the anonymous response be publicly cached is
+    // what would poison it for everyone who signs in.
+    const scoped = perViewer || Boolean(req.user);
+    const cacheControl = `${scoped ? 'private' : 'public'}, max-age=${ttl}`;
+    // res.vary appends; res.set would replace, and CORS has already put Origin there.
+    if (perViewer) res.vary('Authorization');
 
     const key = getCacheKey(prefix || 'route', {
       url: req.originalUrl,
@@ -58,7 +80,7 @@ export function cacheGet({ ttl, prefix }: CacheOptions) {
       const hit = await cacheService.get<any>(key);
       if (hit) {
         res.set('X-Cache', 'HIT');
-        res.set('Cache-Control', `public, max-age=${ttl}`);
+        res.set('Cache-Control', cacheControl);
         res.json(hit);
         return;
       }
@@ -70,7 +92,7 @@ export function cacheGet({ ttl, prefix }: CacheOptions) {
     const send = res.json.bind(res);
     res.json = (body: any) => {
       res.set('X-Cache', 'MISS');
-      res.set('Cache-Control', `public, max-age=${ttl}`);
+      res.set('Cache-Control', cacheControl);
       const out = send(body);
 
       const worthCaching = res.statusCode === 200 && body?.success !== false;

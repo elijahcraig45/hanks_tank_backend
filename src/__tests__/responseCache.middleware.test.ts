@@ -33,7 +33,7 @@ beforeAll((done) => {
   app.get('/plain', cacheGet({ ttl: 60 }), (_req, res) => {
     res.json({ success: true, value: produce() });
   });
-  app.get('/mine', cacheGet({ ttl: 60 }), (req: any, res) => {
+  app.get('/mine', cacheGet({ ttl: 60, perViewer: true }), (req: any, res) => {
     res.json({ success: true, viewer: req.user?.userId ?? 'anon', value: produce() });
   });
   app.get('/boom', cacheGet({ ttl: 60 }), (_req, res) => {
@@ -132,9 +132,38 @@ describe('cacheGet', () => {
     expect(produce).toHaveBeenCalledTimes(2);
   });
 
-  it('sets a shared Cache-Control, which outlives the per-instance store', async () => {
+  it('sets a shared Cache-Control on a public route, which outlives the per-instance store', async () => {
     const res = await fetch(`${baseUrl}/plain`);
     expect(res.headers.get('cache-control')).toBe('public, max-age=60');
+  });
+
+  describe('what shared caches are allowed to do', () => {
+    // App Engine serves through Google's frontend, so these headers are the difference
+    // between a fast page and one visitor's picks appearing on another's screen.
+
+    it('forbids shared caching of a per-viewer route, even anonymously', async () => {
+      // Anonymous matters most: the URL is identical either way, so a publicly cached
+      // anonymous body is what would then be served to everyone who signs in.
+      const anon = await fetch(`${baseUrl}/mine`);
+      expect(anon.headers.get('cache-control')).toBe('private, max-age=60');
+
+      const signedIn = await fetch(`${baseUrl}/mine`, { headers: { 'x-test-user': 'user-a' } });
+      expect(signedIn.headers.get('cache-control')).toBe('private, max-age=60');
+    });
+
+    it('varies a per-viewer route on Authorization', async () => {
+      // `private` stops a shared cache storing it; this stops any cache answering a
+      // signed-in request from an entry built for a different credential.
+      const res = await fetch(`${baseUrl}/mine`);
+      expect(res.headers.get('vary')).toMatch(/Authorization/i);
+    });
+
+    it('downgrades a public route to private once a viewer is attached', async () => {
+      // Belt and braces: a route nobody remembered to declare per-viewer still must not
+      // have a signed-in response stored in a shared cache.
+      const res = await fetch(`${baseUrl}/plain`, { headers: { 'x-test-user': 'user-a' } });
+      expect(res.headers.get('cache-control')).toBe('private, max-age=60');
+    });
   });
 
   it('leaves non-GET requests alone', async () => {
