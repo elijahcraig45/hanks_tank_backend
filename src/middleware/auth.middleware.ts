@@ -52,6 +52,17 @@ const SECRET_PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 
 let clientId: string | null | undefined;
 let clientIdLoad: Promise<string | null> | null = null;
+let clientIdRetryAfter = 0;
+
+/**
+ * How long to wait before re-reading a MISSING client id.
+ *
+ * A found id is cached for the life of the instance — it does not change. A missing one
+ * must not be, and that distinction matters twice over: turning sign-in on would
+ * otherwise require new instances rather than just storing the id, and a transient
+ * Secret Manager failure at cold start would disable sign-in on that instance forever.
+ */
+const MISSING_RETRY_MS = 60_000;
 
 async function loadClientId(): Promise<string | null> {
   const fromEnv = (process.env.GOOGLE_CLIENT_ID || '').trim();
@@ -75,13 +86,34 @@ async function loadClientId(): Promise<string | null> {
   }
 }
 
-/** Resolve once per instance. */
+/**
+ * The client id, resolved once when found and retried periodically when not.
+ */
 export async function googleClientId(): Promise<string | null> {
-  if (clientId === undefined) {
-    clientIdLoad = clientIdLoad || loadClientId();
-    clientId = await clientIdLoad;
+  if (clientId) return clientId;
+
+  if (clientId === null && Date.now() < clientIdRetryAfter) return null;
+
+  if (!clientIdLoad) {
+    clientIdLoad = loadClientId().then((value) => {
+      clientId = value;
+      // Only a miss gets an expiry; a hit is final for this instance.
+      clientIdRetryAfter = value ? 0 : Date.now() + MISSING_RETRY_MS;
+      clientIdLoad = null;
+      return value;
+    }).catch((error) => {
+      clientId = null;
+      clientIdRetryAfter = Date.now() + MISSING_RETRY_MS;
+      clientIdLoad = null;
+      throw error;
+    });
   }
-  return clientId;
+
+  try {
+    return await clientIdLoad;
+  } catch {
+    return null;
+  }
 }
 
 export async function isAuthConfigured(): Promise<boolean> {
@@ -92,6 +124,7 @@ export async function isAuthConfigured(): Promise<boolean> {
 export function __resetClientId(): void {
   clientId = undefined;
   clientIdLoad = null;
+  clientIdRetryAfter = 0;
 }
 
 const client = new OAuth2Client();
