@@ -9,6 +9,7 @@
 import { Request, Response } from 'express';
 import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
+import { isMissingTable } from '../utils/football-request';
 import { getRankingSport, RankingSportConfig } from '../config/rankings.config';
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
@@ -100,7 +101,7 @@ export async function getRankings(req: Request, res: Response): Promise<void> {
       },
     });
   } catch (error: any) {
-    const missingTable = /not found|does not exist/i.test(error?.message || '');
+    const missingTable = isMissingTable(error);
     if (missingTable) {
       logger.warn('power rankings table missing', { sport: sport.key, table });
       res.json({

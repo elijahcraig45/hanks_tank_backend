@@ -1,15 +1,22 @@
 #!/bin/bash
 # Renders app.yaml -> app.generated.yaml with secrets substituted in.
 #
-# app.yaml is public and holds only a __NEWS_API_KEY__ placeholder. The real value
-# comes from the environment: a GitHub Actions secret in CI, or your shell locally.
+# app.yaml is public and holds only __PLACEHOLDER__ tokens. The real values come from
+# the environment: GitHub Actions secrets in CI, or your shell locally.
 #
 # Local deploys:  export NEWS_API_KEY=... && npm run deploy
-# Retrieve it with: gh secret list  (values are write-only; use your newsapi.org account)
+# Retrieve NEWS_API_KEY with: gh secret list  (values are write-only; use your
+# newsapi.org account)
+#
+# The CollegeFootballData key is deliberately NOT handled here. The backend reads it
+# from Secret Manager at runtime, using the service account App Engine already runs as,
+# so no deploy — local or CI — needs to know the value.
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+PROJECT="${GCP_PROJECT_ID:-hankstank}"
 
 if [ -z "${NEWS_API_KEY:-}" ]; then
     cat >&2 <<'EOF'
