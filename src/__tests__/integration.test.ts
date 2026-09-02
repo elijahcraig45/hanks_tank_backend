@@ -211,19 +211,18 @@ describe('BigQuery Sync Integration Tests', () => {
     });
   });
 
-  describe('Rate limiting', () => {
-    
-    it('should add delay between API calls', async () => {
-      const delayMs = 1000;
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-      
-      const startTime = Date.now();
-      await delay(delayMs);
-      const endTime = Date.now();
-      
-      expect(endTime - startTime).toBeGreaterThanOrEqual(delayMs);
-    });
-  });
+  // A "rate limiting" test lived here and was removed. It declared its own `delay`
+  // helper and asserted that `Date.now()` advanced by at least 1000ms across a 1000ms
+  // `setTimeout` — so it referenced no application code and could not detect any
+  // regression in it, while costing a real second of CI and flaking at the boundary
+  // (it failed on 999ms, because setTimeout's deadline and Date.now() are not the same
+  // clock and Date.now() has millisecond granularity).
+  //
+  // The behaviour it was named after is real: bigquery-sync.service.ts calls
+  // `this.delay(1000)` between MLB API calls. Genuinely covering that means importing
+  // the service, which constructs GCP clients at module load — the reason every test in
+  // this file asserts arithmetic instead. So that delay is deliberately left uncovered
+  // rather than pretended-covered.
 
   describe('Data transformation', () => {
     
