@@ -136,7 +136,7 @@ export async function getScoreboard(req: Request, res: Response): Promise<void> 
   if (!sport) return;
   if (!requireCollege(res, sport.key, 'scoreboard')) return;
 
-  if (!hasApiKey()) {
+  if (!(await hasApiKey())) {
     respondUnavailable(
       res, sport, 'live scoreboard',
       'Live scores need a CollegeFootballData API key, which is not configured here.',
@@ -207,7 +207,7 @@ export async function getSchedule(req: Request, res: Response): Promise<void> {
   if (!sport) return;
   if (!requireCollege(res, sport.key, 'schedule')) return;
 
-  if (!hasApiKey()) {
+  if (!(await hasApiKey())) {
     respondUnavailable(
       res, sport, 'schedule',
       'Schedules need a CollegeFootballData API key, which is not configured here.',
@@ -385,7 +385,7 @@ export async function getGameDetail(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  if (!hasApiKey()) {
+  if (!(await hasApiKey())) {
     respondUnavailable(
       res, sport, 'game detail',
       'Game detail needs a CollegeFootballData API key, which is not configured here.',
