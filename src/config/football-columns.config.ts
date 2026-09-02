@@ -242,6 +242,123 @@ const NFL_WEEK_EPA: ColumnSpec[] = [
   { key: 'def_plays', label: 'Def Plays', group: 'defense', format: 'integer' },
 ];
 
+
+/* ------------------------------------------------------------------------- *
+ * CFB per-team, per-game advanced stats — cfb_season.team_game_advanced
+ *
+ * The college answer to nfl_historical.team_week_epa, and a richer one: PPA in place
+ * of EPA, plus line yards, stuff rate, power success, havoc and the standard/passing
+ * downs splits, none of which the NFL table carries.
+ *
+ * The first six keys are aliased in SQL to the NFL table's canonical names, so one
+ * client renderer serves both sports without learning two vocabularies.
+ * ------------------------------------------------------------------------- */
+
+const CFB_GAME_ADVANCED: ColumnSpec[] = [
+  { key: 'season', label: 'Season', group: 'core', format: 'integer' },
+  { key: 'week', label: 'Wk', group: 'core', format: 'integer' },
+  { key: 'team', label: 'Team', group: 'core', format: 'text' },
+  { key: 'opponent', label: 'Opp', group: 'core', format: 'text' },
+  // Aliased from ppa / success_rate / explosiveness — see statsFieldMap.
+  { key: 'off_epa_play', label: 'Off PPA', group: 'offense', format: 'decimal3', higherIsBetter: true },
+  { key: 'off_success_rate', label: 'Off SR', group: 'offense', format: 'rate', higherIsBetter: true },
+  { key: 'off_explosive_rate', label: 'Off Explosive', group: 'offense', format: 'decimal2', higherIsBetter: true },
+  { key: 'off_plays', label: 'Plays', group: 'offense', format: 'integer' },
+  { key: 'off_drives', label: 'Drives', group: 'offense', format: 'integer' },
+  { key: 'off_line_yards', label: 'Line Yds', group: 'line', format: 'decimal2', higherIsBetter: true },
+  { key: 'off_second_level_yards', label: '2nd Level', group: 'line', format: 'decimal2', higherIsBetter: true },
+  { key: 'off_open_field_yards', label: 'Open Field', group: 'line', format: 'decimal2', higherIsBetter: true },
+  { key: 'off_stuff_rate', label: 'Stuffed', group: 'line', format: 'rate', higherIsBetter: false },
+  { key: 'off_power_success', label: 'Power Succ', group: 'line', format: 'rate', higherIsBetter: true },
+  { key: 'off_standard_downs_ppa', label: 'Std Downs PPA', group: 'situational', format: 'decimal3', higherIsBetter: true },
+  { key: 'off_passing_downs_ppa', label: 'Pass Downs PPA', group: 'situational', format: 'decimal3', higherIsBetter: true },
+  { key: 'off_rushing_plays_ppa', label: 'Rush PPA', group: 'situational', format: 'decimal3', higherIsBetter: true },
+  { key: 'off_passing_plays_ppa', label: 'Pass PPA', group: 'situational', format: 'decimal3', higherIsBetter: true },
+  // Defensive: what opponents managed, so lower is better throughout.
+  { key: 'def_epa_play', label: 'Def PPA', group: 'defense', format: 'decimal3', higherIsBetter: false, opponent: true },
+  { key: 'def_success_rate', label: 'Def SR', group: 'defense', format: 'rate', higherIsBetter: false, opponent: true },
+  { key: 'def_explosive_rate', label: 'Def Explosive', group: 'defense', format: 'decimal2', higherIsBetter: false, opponent: true },
+  { key: 'def_line_yards', label: 'Line Yds Allowed', group: 'defense', format: 'decimal2', higherIsBetter: false, opponent: true },
+  { key: 'def_stuff_rate', label: 'Stuffs Made', group: 'defense', format: 'rate', higherIsBetter: true, opponent: true },
+  // Havoc rate is published only by the SEASON advanced endpoint, not the per-game
+  // one, so it belongs to team_season_advanced and is absent here.
+  { key: 'def_plays', label: 'Def Plays', group: 'defense', format: 'integer', opponent: true },
+];
+
+/* CFB player season stats — cfb_season.player_season_stats.
+ * Pivoted from CollegeFootballData, which finally makes a college player table
+ * possible: ESPN's sortable athlete endpoint returns "-" for the stat it sorts on. */
+
+const CFB_PLAYER_SEASON: ColumnSpec[] = [
+  { key: 'player_name', label: 'Player', group: 'core', format: 'text' },
+  { key: 'position', label: 'Pos', group: 'core', format: 'text' },
+  { key: 'team', label: 'Team', group: 'core', format: 'text' },
+  { key: 'conference', label: 'Conf', group: 'core', format: 'text' },
+  { key: 'passing_yds', label: 'Pass Yds', group: 'passing', format: 'integer', higherIsBetter: true },
+  { key: 'passing_td', label: 'Pass TD', group: 'passing', format: 'integer', higherIsBetter: true },
+  { key: 'passing_int', label: 'INT', group: 'passing', format: 'integer', higherIsBetter: false },
+  { key: 'passing_att', label: 'Att', group: 'passing', format: 'integer' },
+  { key: 'passing_completions', label: 'Cmp', group: 'passing', format: 'integer' },
+  { key: 'passing_pct', label: 'Cmp%', group: 'passing', format: 'rate', higherIsBetter: true },
+  { key: 'passing_ypa', label: 'Y/A', group: 'passing', format: 'decimal2', higherIsBetter: true },
+  { key: 'rushing_yds', label: 'Rush Yds', group: 'rushing', format: 'integer', higherIsBetter: true },
+  { key: 'rushing_td', label: 'Rush TD', group: 'rushing', format: 'integer', higherIsBetter: true },
+  { key: 'rushing_car', label: 'Car', group: 'rushing', format: 'integer' },
+  { key: 'rushing_ypc', label: 'Y/C', group: 'rushing', format: 'decimal2', higherIsBetter: true },
+  { key: 'rushing_long', label: 'Long', group: 'rushing', format: 'integer' },
+  { key: 'receiving_yds', label: 'Rec Yds', group: 'receiving', format: 'integer', higherIsBetter: true },
+  { key: 'receiving_rec', label: 'Rec', group: 'receiving', format: 'integer', higherIsBetter: true },
+  { key: 'receiving_td', label: 'Rec TD', group: 'receiving', format: 'integer', higherIsBetter: true },
+  { key: 'receiving_ypr', label: 'Y/R', group: 'receiving', format: 'decimal2', higherIsBetter: true },
+  { key: 'defensive_tot', label: 'Tackles', group: 'defense', format: 'decimal1', higherIsBetter: true },
+  { key: 'defensive_solo', label: 'Solo', group: 'defense', format: 'decimal1', higherIsBetter: true },
+  { key: 'defensive_sacks', label: 'Sacks', group: 'defense', format: 'decimal1', higherIsBetter: true },
+  { key: 'defensive_tfl', label: 'TFL', group: 'defense', format: 'decimal1', higherIsBetter: true },
+  { key: 'defensive_qb_hur', label: 'QB Hur', group: 'defense', format: 'integer', higherIsBetter: true },
+  { key: 'interceptions_int', label: 'INT', group: 'defense', format: 'integer', higherIsBetter: true },
+  { key: 'kicking_fgm', label: 'FG', group: 'kicking', format: 'integer', higherIsBetter: true },
+  { key: 'kicking_fga', label: 'FGA', group: 'kicking', format: 'integer' },
+  { key: 'kicking_pct', label: 'FG%', group: 'kicking', format: 'rate', higherIsBetter: true },
+  { key: 'kicking_pts', label: 'Pts', group: 'kicking', format: 'integer', higherIsBetter: true },
+];
+
+/* NFL player season stats — nfl_season.player_season_stats (148 columns; this is the
+ * readable subset). Keys are the CANONICAL names shared with the college catalog, so
+ * both sports answer in one vocabulary and the client renders either without branching.
+ * The physical nflverse names are supplied by the sport's playerFieldMap. */
+
+const NFL_PLAYER_SEASON: ColumnSpec[] = [
+  { key: 'player_name', label: 'Player', group: 'core', format: 'text' },
+  { key: 'position', label: 'Pos', group: 'core', format: 'text' },
+  { key: 'team', label: 'Team', group: 'core', format: 'text' },
+  { key: 'games', label: 'G', group: 'core', format: 'integer' },
+  { key: 'passing_yds', label: 'Pass Yds', group: 'passing', format: 'integer', higherIsBetter: true },
+  { key: 'passing_td', label: 'Pass TD', group: 'passing', format: 'integer', higherIsBetter: true },
+  { key: 'passing_int', label: 'INT', group: 'passing', format: 'integer', higherIsBetter: false },
+  { key: 'passing_att', label: 'Att', group: 'passing', format: 'integer' },
+  { key: 'passing_completions', label: 'Cmp', group: 'passing', format: 'integer' },
+  // EPA and CPOE have no college analogue; the catalog carries what each sport has.
+  { key: 'passing_epa', label: 'Pass EPA', group: 'passing', format: 'decimal2', higherIsBetter: true },
+  { key: 'passing_cpoe', label: 'CPOE', group: 'passing', format: 'decimal2', higherIsBetter: true },
+  { key: 'rushing_yds', label: 'Rush Yds', group: 'rushing', format: 'integer', higherIsBetter: true },
+  { key: 'rushing_td', label: 'Rush TD', group: 'rushing', format: 'integer', higherIsBetter: true },
+  { key: 'rushing_car', label: 'Car', group: 'rushing', format: 'integer' },
+  { key: 'rushing_epa', label: 'Rush EPA', group: 'rushing', format: 'decimal2', higherIsBetter: true },
+  { key: 'receiving_yds', label: 'Rec Yds', group: 'receiving', format: 'integer', higherIsBetter: true },
+  { key: 'receiving_rec', label: 'Rec', group: 'receiving', format: 'integer', higherIsBetter: true },
+  { key: 'receiving_td', label: 'Rec TD', group: 'receiving', format: 'integer', higherIsBetter: true },
+  { key: 'targets', label: 'Tgt', group: 'receiving', format: 'integer' },
+  { key: 'receiving_epa', label: 'Rec EPA', group: 'receiving', format: 'decimal2', higherIsBetter: true },
+  { key: 'target_share', label: 'Tgt Share', group: 'receiving', format: 'rate', higherIsBetter: true },
+  { key: 'defensive_sacks', label: 'Sacks', group: 'defense', format: 'decimal1', higherIsBetter: true },
+  { key: 'defensive_solo', label: 'Solo', group: 'defense', format: 'integer', higherIsBetter: true },
+  { key: 'interceptions_int', label: 'INT', group: 'defense', format: 'integer', higherIsBetter: true },
+  { key: 'defensive_pd', label: 'PD', group: 'defense', format: 'integer', higherIsBetter: true },
+  { key: 'kicking_fgm', label: 'FG', group: 'kicking', format: 'integer', higherIsBetter: true },
+  { key: 'kicking_fga', label: 'FGA', group: 'kicking', format: 'integer' },
+  { key: 'headshot_url', label: 'Headshot', group: 'core', format: 'text' },
+];
+
 /* ------------------------------------------------------------------------- */
 
 export const COLUMN_CATALOGS: Record<string, ColumnCatalog> = {
@@ -250,6 +367,41 @@ export const COLUMN_CATALOGS: Record<string, ColumnCatalog> = {
     identity: ['season', 'week', 'team'],
     groups: [g('core', 'Overview'), g('offense', 'Offense'), g('defense', 'Defense')],
     columns: NFL_WEEK_EPA,
+  },
+  cfb_team_game: {
+    identity: ['season', 'week', 'team', 'opponent'],
+    groups: [
+      g('core', 'Overview'),
+      g('offense', 'Offense'),
+      g('line', 'Line & Rushing'),
+      g('situational', 'By Down & Play Type'),
+      g('defense', 'Defense'),
+    ],
+    columns: CFB_GAME_ADVANCED,
+  },
+  nfl_player_season: {
+    identity: ['player_name', 'position', 'team'],
+    groups: [
+      g('core', 'Player'),
+      g('passing', 'Passing'),
+      g('rushing', 'Rushing'),
+      g('receiving', 'Receiving'),
+      g('defense', 'Defense'),
+      g('kicking', 'Kicking'),
+    ],
+    columns: NFL_PLAYER_SEASON,
+  },
+  cfb_player_season: {
+    identity: ['player_name', 'position', 'team'],
+    groups: [
+      g('core', 'Player'),
+      g('passing', 'Passing'),
+      g('rushing', 'Rushing'),
+      g('receiving', 'Receiving'),
+      g('defense', 'Defense'),
+      g('kicking', 'Kicking'),
+    ],
+    columns: CFB_PLAYER_SEASON,
   },
 };
 
