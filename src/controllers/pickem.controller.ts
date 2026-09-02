@@ -106,6 +106,14 @@ export async function getWeekGames(req: Request, res: Response): Promise<void> {
           home_team, away_team, home_display, away_display,
           home_conference, away_conference, neutral_site,
           spread_line, total_line, home_score, away_score, completed,
+          -- Per-side context, attached at ingest. Enough to make a pick without
+          -- leaving the sheet, which is the whole reason it is here.
+          home_rank, away_rank, home_rating, away_rating,
+          home_record, away_record, home_record_season, away_record_season,
+          home_ap_rank, away_ap_rank, home_coaches_rank, away_coaches_rank,
+          home_fpi, away_fpi, home_fpi_rank, away_fpi_rank,
+          home_streak, away_streak,
+          model_home_win_prob, model_pick, model_confidence,
           -- The lock, decided by the server clock against this game's own kickoff.
           -- A game with no posted kickoff is treated as open until it completes,
           -- rather than locked forever by a null.
