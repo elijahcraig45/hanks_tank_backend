@@ -5,6 +5,7 @@
 
 import { Router } from 'express';
 import { legacyController } from '../controllers/legacy.controller';
+import { getSchedulerHealth } from '../controllers/pipeline-health.controller';
 
 const router = Router();
 
@@ -55,16 +56,9 @@ router.get('/mlb-news', legacyController.getMLBNews.bind(legacyController));
 router.get('/braves-news', legacyController.getBravesNews.bind(legacyController));
 router.post('/news/refresh', legacyController.refreshNews.bind(legacyController));
 
-// Health check with scheduler status
-router.get('/health/scheduler', (req, res) => {
-  const { schedulerService } = require('../services/scheduler.service');
-  res.json({
-    status: 'ok',
-    scheduler: {
-      jobs: schedulerService.getJobStatus(),
-      timestamp: new Date().toISOString()
-    }
-  });
-});
+// Pipeline health. Reports how old each league's newest prediction is, not
+// just which in-process cron tasks are registered - the MLB and six football
+// jobs are Cloud Scheduler and were never visible here at all.
+router.get('/health/scheduler', getSchedulerHealth);
 
 export default router;
