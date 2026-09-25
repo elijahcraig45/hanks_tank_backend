@@ -93,7 +93,7 @@ describe('GET /api/models/mlb/compare', () => {
     expect(byKey.v10.available).toBe(true);
     expect(byKey.elo.available).toBe(true);
     expect(byKey.logit3.available).toBe(false);
-    expect(byKey.logit3.note).toMatch(/not been created/);
+    expect(byKey.logit3.note).toMatch(/Not live yet/);
     expect(byKey.sim_blend.available).toBe(false);
     expect(byKey.market.backtest_only).toBe(true);
     expect(byKey.market.available).toBe(false);
@@ -192,7 +192,7 @@ describe('GET /api/models/mlb/totals-props', () => {
     const { status, body } = await get('/api/models/mlb/totals-props?date=2026-09-24');
     expect(status).toBe(200);
     expect(body.data.available).toBe(false);
-    expect(body.data.note).toMatch(/not been created/);
+    expect(body.data.note).toMatch(/Not live yet/);
     expect(body.data.backtest.totals).toBeDefined();
     expect(body.data.batter_props.shown).toBe(false);
   });

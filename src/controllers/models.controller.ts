@@ -201,7 +201,7 @@ async function loadModel(
       rows: [],
       status: {
         ...base, available: false, rows: 0,
-        note: `${dataset}.${m.table} has not been created yet (shadow writer pending approval).`,
+        note: 'Not live yet: this shadow model has no pregame predictions recorded so far.',
       },
     };
   }
@@ -544,9 +544,7 @@ export async function getMlbTotalsProps(req: Request, res: Response): Promise<vo
           available: false,
           date,
           games: [],
-          note: `${MLB_DATASET}.${MLB_PROPS_TABLE} has not been created yet — the simulator's `
-            + 'shadow writer is built but not deployed (it needs more memory than the live '
-            + 'Cloud Function has).',
+          note: 'Not live yet: the simulator has no pregame totals or props recorded so far.',
           batter_props: { shown: false, reason: 'Over-predicted; hidden until calibrated.' },
           backtest,
         },

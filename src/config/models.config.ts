@@ -80,9 +80,8 @@ export const MLB_MODELS: ModelSource[] = [
     label: 'Betting market',
     role: 'benchmark',
     backtestOnly: true,
-    note: 'No live MLB odds are ingested (the corporate proxy blocks odds feeds locally; '
-      + 'a GCP-side fetch is not built). Stored closing lines cover 2012-2021, so the market '
-      + 'is scored in the backtest only.',
+    note: 'Live MLB odds are not collected yet. Stored closing lines cover 2012-2021, so '
+      + 'the market is scored in the backtest only.',
   },
 ];
 
