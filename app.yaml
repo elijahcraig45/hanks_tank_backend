@@ -42,6 +42,8 @@ env_variables:
   GOOGLE_CLIENT_ID: ""
   CORS_ORIGIN: https://hankstank.com,https://www.hankstank.com,https://frontend-dot-hankstank.uc.r.appspot.com,http://localhost:3000,http://localhost:3001
   ML_FUNCTION_URL: https://mlb-2026-daily-pipeline-127033547664.us-central1.run.app
+  # Separate 4 GiB function for the PA-simulator shadow; unset disables its per-game task.
+  SIM_BLEND_FUNCTION_URL: https://mlb-2026-sim-blend-127033547664.us-central1.run.app
   LINEUP_TASK_QUEUE: lineup-pregame
   TASK_QUEUE_LOCATION: us-central1
 
