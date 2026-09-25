@@ -101,8 +101,7 @@ export const FOOTBALL_MODELS: Record<string, ModelSource[]> = {
       key: 'drive_sim', label: 'Drive simulator', role: 'shadow',
       table: 'game_predictions_drive_sim', marginExpr: 'predicted_home_margin',
       planned: true, backtestOnly: true,
-      note: 'Research only: no live writer. Its measured record is the backtest below '
-        + '(research/football_2026_09/drive_sim).',
+      note: 'Research only: no live writer. Its measured record is the backtest below.',
     },
   ],
   cfb: [
