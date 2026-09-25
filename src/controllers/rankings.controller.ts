@@ -11,6 +11,7 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
 import { isMissingTable } from '../utils/football-request';
 import { getRankingSport, RankingSportConfig } from '../config/rankings.config';
+import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 const bigquery = new BigQuery({ projectId: PROJECT });
@@ -20,6 +21,29 @@ const MAX_LIMIT = 400;
 function datasetFor(sport: RankingSportConfig): string {
   return process.env[sport.datasetEnv] || sport.defaultDataset;
 }
+
+// DATE/TIMESTAMP columns on the board. BigQuery returns them as { value } wrappers,
+// which the frontend would otherwise receive as objects.
+const TEMPORAL_COLUMNS = ['computed_at', 'as_of_date'] as const;
+
+export function normalizeRankingRow(row: Record<string, any>): Record<string, any> {
+  const out = { ...row };
+  for (const column of TEMPORAL_COLUMNS) {
+    if (column in out) out[column] = normalizeBigQueryTemporalValue(out[column]);
+  }
+  return out;
+}
+
+// What the rating is fitted on. Older tables carry no `model` column; they were all
+// W/L Bradley-Terry.
+const METHODS: Record<string, string> = {
+  bt: 'Bradley-Terry on wins and losses, ridge-regularized, fitted globally over every '
+    + 'game with an explicit home-field term and a decaying prior on last season',
+  margin: 'Ridge regression on scoring margin, fitted globally over every game with an '
+    + 'explicit home-field term and a decaying prior on last season',
+  blend: 'Average of a win/loss Bradley-Terry fit and a scoring-margin ridge fit, both '
+    + 'fitted globally with a home-field term and a decaying prior on last season',
+};
 
 /**
  * GET /api/rankings/:sport?season=&division=&limit=
@@ -75,8 +99,10 @@ export async function getRankings(req: Request, res: Response): Promise<void> {
   `;
 
   try {
-    const [rows] = await bigquery.query({ query: sql, params });
+    const [raw] = await bigquery.query({ query: sql, params });
+    const rows = (raw as Record<string, any>[]).map(normalizeRankingRow);
     const first: any = rows[0] || {};
+    const model: string = first.model || 'bt';
 
     res.json({
       success: true,
@@ -88,6 +114,11 @@ export async function getRankings(req: Request, res: Response): Promise<void> {
         division: params.division ?? null,
         count: rows.length,
         as_of_week: first.as_of_week ?? null,
+        // The last game date the board has seen and when it was computed. Prefer these
+        // for display: an MLB "week" is an internal index, not a unit anyone counts in.
+        as_of_date: first.as_of_date ?? null,
+        computed_at: first.computed_at ?? null,
+        model,
         home_field_points: first.home_field_points ?? null,
         prior_weight: first.prior_weight ?? null,
         record_season: first.record_season ?? null,
@@ -95,8 +126,7 @@ export async function getRankings(req: Request, res: Response): Promise<void> {
         // UI must say out loud rather than presenting it as this season's form.
         is_preseason: first.record_season != null && first.record_season !== season,
         divisions: sport.divisions,
-        method: 'Bradley-Terry, ridge-regularized, fitted globally over every game '
-          + 'with an explicit home-field term and a decaying prior on last season',
+        method: METHODS[model] || METHODS.bt,
         note: sport.note ?? null,
       },
     });
