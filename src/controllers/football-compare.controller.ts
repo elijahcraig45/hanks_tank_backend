@@ -43,7 +43,7 @@ const table = (dataset: string, name: string) => `\`${PROJECT}.${dataset}.${name
  * prediction row's game_date is a date, not a kickoff), and college's from the
  * prediction row's game_date, which is ESPN's kickoff timestamp.
  */
-function spineSql(sport: FootballSportConfig, hasDivision: boolean): string {
+export function spineSql(sport: FootballSportConfig, hasDivision: boolean): string {
   const preds = table(sport.seasonDataset, sport.predictionsTable);
   const games = table(sport.histDataset, sport.gamesTable);
   const pickem = table(PICKEM_DATASET, 'games');
