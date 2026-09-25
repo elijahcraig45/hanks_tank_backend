@@ -35,6 +35,8 @@ export interface ModelRow {
   game_id: string;
   home_win_probability: number | null;
   predicted_home_margin?: number | null;
+  /** Predicted total points/runs, for models that produce one (models page only). */
+  predicted_total?: number | null;
   predicted_at: any;
   model_version?: string | null;
 }
@@ -42,6 +44,7 @@ export interface ModelRow {
 export interface GamePrediction {
   home_win_probability: number;
   predicted_home_margin: number | null;
+  predicted_total?: number | null;
   predicted_at: string | null;
   /** Written strictly before kickoff. Only these are scored. */
   pregame: boolean;
@@ -154,6 +157,8 @@ export function pickPrediction(rows: ModelRow[], kickoffMs: number | null): Game
   return {
     home_win_probability: Number(chosen.row.home_win_probability),
     predicted_home_margin: finite(chosen.row.predicted_home_margin),
+    ...(chosen.row.predicted_total !== undefined
+      ? { predicted_total: finite(chosen.row.predicted_total) } : {}),
     predicted_at: toIso(chosen.row.predicted_at),
     pregame: Boolean(best),
     model_version: chosen.row.model_version ?? null,
