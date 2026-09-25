@@ -28,6 +28,8 @@ import {
   getGameDetail,
 } from '../controllers/football-games.controller';
 
+import { getModelComparison } from '../controllers/football-compare.controller';
+
 import { cacheGet } from '../middleware/responseCache.middleware';
 
 /**
@@ -44,6 +46,7 @@ const TTL = {
   players: 1800,
   games: 3600,
   teams: 86400,
+  compare: 900,
 } as const;
 
 const router = Router({ mergeParams: true });
@@ -52,6 +55,9 @@ const router = Router({ mergeParams: true });
 router.get('/:sport/predictions/accuracy', cacheGet({ ttl: TTL.accuracy, prefix: 'ftbl:acc' }), getAccuracy);
 router.get('/:sport/predictions/diagnostics', cacheGet({ ttl: TTL.diagnostics, prefix: 'ftbl:diag' }), getDiagnostics);
 router.get('/:sport/predictions', cacheGet({ ttl: TTL.predictions, prefix: 'ftbl:preds' }), getPredictions);
+// Side-by-side model comparison (experiment): every model's pregame prediction per
+// game plus a season scoreboard. Same TTL as predictions, which move in-week.
+router.get('/:sport/models/compare', cacheGet({ ttl: TTL.compare, prefix: 'ftbl:cmp' }), getModelComparison);
 router.get('/:sport/rankings', cacheGet({ ttl: TTL.teamStats, prefix: 'ftbl:rank' }), getRankings);
 // season totals before the bare /stats/teams so the more specific path wins
 router.get('/:sport/stats/teams/season', searchTeamSeasonStats);
