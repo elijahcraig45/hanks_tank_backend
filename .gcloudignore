@@ -49,7 +49,7 @@ Thumbs.db
 node_modules/
 
 # Ignore data directories (not needed for production - BigQuery is the source)
-data/
+/data/
 logs/
 scripts/__pycache__/
 
