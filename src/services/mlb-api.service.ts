@@ -501,6 +501,8 @@ export class MLBApiService {
     teamId?: number;
     sportId?: number;
     hydrate?: string;
+    /** Override the schedule TTL (seconds), e.g. for a slate showing live status. */
+    cacheTtl?: number;
   }): Promise<{ dates: any[] }> {
     const {
       date,
@@ -510,10 +512,11 @@ export class MLBApiService {
       teamId,
       sportId,
       hydrate,
+      cacheTtl,
     } = options;
     const cacheKey = CacheKeys.schedule.byDateRange(startDate, endDate, teamId);
     return this.getCachedOrFetch(
-      `${cacheKey}:${date || ''}:${season || ''}:${hydrate || ''}`,
+      `${cacheKey}:${date || ''}:${season || ''}:${hydrate || ''}${cacheTtl ? `:ttl${cacheTtl}` : ''}`,
       () => this.makeRequest<{ dates: any[] }>('/schedule', {
         date,
         startDate,
@@ -523,7 +526,7 @@ export class MLBApiService {
         sportId: sportId || 1, // MLB is sport ID 1
         hydrate,
       }),
-      config.cache.ttl.schedule
+      cacheTtl ?? config.cache.ttl.schedule
     );
   }
 

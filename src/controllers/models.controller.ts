@@ -145,17 +145,34 @@ export function mlbSpineSql(): string {
     ORDER BY g.game_date, t.game_time_utc, g.game_pk`;
 }
 
-/** One model's rows, through the shared contract. */
-export function modelSql(sport: string, m: ModelSource, dataset: string): string {
+/**
+ * One model's rows, through the shared contract.
+ *
+ * `scope` narrows the rows: 'season' (the compare page, @season), 'date' (one MLB slate,
+ * @date) or 'week' (one football slate, @season and @week). The unified slate also asks
+ * for the predicted home/away score columns; the compare page never reads them.
+ */
+export function modelSql(
+  sport: string, m: ModelSource, dataset: string,
+  scope: 'season' | 'date' | 'week' = 'season', withScores = false,
+): string {
   const prob = m.probColumn || 'home_win_probability';
   const margin = m.marginExpr || 'CAST(NULL AS FLOAT64)';
   const total = m.totalExpr || 'CAST(NULL AS FLOAT64)';
   const id = sport === 'mlb' ? 'CAST(game_pk AS STRING)' : 'game_id';
-  const where = sport === 'mlb' ? 'EXTRACT(YEAR FROM game_date) = @season' : 'season = @season';
+  let where: string;
+  if (scope === 'date') where = 'game_date = @date';
+  else if (scope === 'week') where = 'season = @season AND week = @week';
+  else where = sport === 'mlb' ? 'EXTRACT(YEAR FROM game_date) = @season' : 'season = @season';
+  const scores = withScores
+    ? `${m.homeScoreExpr || 'CAST(NULL AS FLOAT64)'} AS predicted_home_score,
+           ${m.awayScoreExpr || 'CAST(NULL AS FLOAT64)'} AS predicted_away_score,
+           `
+    : '';
   return `
     SELECT ${id} AS game_id, ${prob} AS home_win_probability,
            ${margin} AS predicted_home_margin, ${total} AS predicted_total,
-           predicted_at, model_version
+           ${scores}predicted_at, model_version
     FROM ${table(dataset, m.table as string)}
     WHERE ${where} AND ${prob} IS NOT NULL`;
 }

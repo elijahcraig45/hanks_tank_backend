@@ -40,6 +40,18 @@ export interface ModelSource {
   backtestOnly?: boolean;
   /** Shown with the model when it has no live rows. */
   note?: string;
+  /** SQL expressions for predicted home / away score, where the model has them. */
+  homeScoreExpr?: string;
+  awayScoreExpr?: string;
+  /**
+   * Unified slate (/api/predictions/:sport/slate): what the model produces, a Learn page,
+   * and whether its full distributions live in the sport's game_sim_distributions.
+   */
+  outputs?: string[];
+  learn?: string | null;
+  simDistributions?: boolean;
+  /** Player projections live in player_sim_projections (MLB PA simulator). */
+  hasPlayers?: boolean;
 }
 
 export const MLB_DATASET = process.env.MLB_2026_DATASET || 'mlb_2026_season';
@@ -50,12 +62,16 @@ export const MLB_MODELS: ModelSource[] = [
     label: 'V10 (production)',
     role: 'production',
     table: 'game_predictions',
+    outputs: ['win_prob'],
+    learn: '/learn/mlb-v10-features.html',
   },
   {
     key: 'logit3',
     label: '3-feature logistic',
     role: 'shadow',
     table: 'game_predictions_logit3',
+    outputs: ['win_prob'],
+    learn: '/learn/model-history.html',
   },
   {
     key: 'sim_blend',
@@ -66,6 +82,12 @@ export const MLB_MODELS: ModelSource[] = [
     // scored so that shows, not hidden.
     totalExpr: 'mean_home_runs + mean_away_runs',
     marginExpr: 'mean_home_runs - mean_away_runs',
+    homeScoreExpr: 'mean_home_runs',
+    awayScoreExpr: 'mean_away_runs',
+    outputs: ['win_prob', 'score', 'total', 'margin', 'dist', 'players'],
+    learn: '/learn/mlb-pa-simulator.html',
+    simDistributions: true,
+    hasPlayers: true,
   },
   {
     key: 'elo',
@@ -74,12 +96,16 @@ export const MLB_MODELS: ModelSource[] = [
     // The production pipeline's own Elo, stored on the same pregame row as V10.
     table: 'game_predictions',
     probColumn: 'elo_home_win_prob',
+    outputs: ['win_prob'],
+    learn: '/learn/power-rankings.html',
   },
   {
     key: 'market',
     label: 'Betting market',
     role: 'benchmark',
     backtestOnly: true,
+    outputs: [],
+    learn: null,
     note: 'Live MLB odds are not collected yet. Stored closing lines cover 2012-2021, so '
       + 'the market is scored in the backtest only.',
   },
@@ -87,36 +113,55 @@ export const MLB_MODELS: ModelSource[] = [
 
 export const FOOTBALL_MODELS: Record<string, ModelSource[]> = {
   nfl: [
-    { key: 'market', label: 'Betting market', role: 'benchmark' },
+    {
+      key: 'market', label: 'Betting market', role: 'benchmark',
+      outputs: ['win_prob', 'margin', 'total'], learn: null,
+    },
     {
       key: 'ridge', label: 'Margin ridge', role: 'shadow',
       table: 'game_predictions_ridge_shadow', marginExpr: 'predicted_home_margin',
+      outputs: ['win_prob', 'margin'], learn: '/learn/football-model-compare.html',
     },
-    { key: 'xgb', label: 'XGBoost (production)', role: 'production', table: 'game_predictions' },
+    {
+      key: 'xgb', label: 'XGBoost (production)', role: 'production', table: 'game_predictions',
+      outputs: ['win_prob'], learn: '/learn/football-models.html',
+    },
     {
       key: 'fpi', label: 'ESPN FPI', role: 'reference',
       table: 'fpi_game_predictions', marginExpr: 'predicted_home_margin',
+      outputs: ['win_prob', 'margin'], learn: '/learn/football-model-compare.html',
     },
     {
       key: 'drive_sim', label: 'Drive simulator', role: 'shadow',
       table: 'game_predictions_drive_sim', marginExpr: 'predicted_home_margin',
+      outputs: ['win_prob', 'score', 'total', 'margin', 'dist'],
+      learn: '/learn/football-drive-sim.html',
+      simDistributions: true,
+      // planned/backtestOnly keep /api/models/nfl/compare from querying it; the unified
+      // slate queries any model with a table and reports a missing one as available:false.
       planned: true, backtestOnly: true,
       note: 'Research only: no live writer. Its measured record is the backtest below.',
     },
   ],
   cfb: [
-    { key: 'market', label: 'Betting market', role: 'benchmark' },
+    {
+      key: 'market', label: 'Betting market', role: 'benchmark',
+      outputs: ['win_prob', 'margin', 'total'], learn: null,
+    },
     {
       key: 'fpi', label: 'ESPN FPI', role: 'reference',
       table: 'fpi_game_predictions', marginExpr: 'predicted_home_margin',
+      outputs: ['win_prob', 'margin'], learn: '/learn/football-model-compare.html',
     },
     {
       key: 'ridge', label: 'Margin ridge', role: 'shadow',
       table: 'game_predictions_ridge_shadow', marginExpr: 'predicted_home_margin',
+      outputs: ['win_prob', 'margin'], learn: '/learn/football-model-compare.html',
     },
     {
       key: 'xgb', label: 'XGBoost (legacy production)', role: 'production',
       table: 'game_predictions',
+      outputs: ['win_prob'], learn: '/learn/football-models.html',
     },
   ],
 };
