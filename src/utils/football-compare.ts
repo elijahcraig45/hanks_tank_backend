@@ -37,6 +37,9 @@ export interface ModelRow {
   predicted_home_margin?: number | null;
   /** Predicted total points/runs, for models that produce one (models page only). */
   predicted_total?: number | null;
+  /** Predicted home / away score, for models that produce them (unified slate only). */
+  predicted_home_score?: number | null;
+  predicted_away_score?: number | null;
   predicted_at: any;
   model_version?: string | null;
 }
@@ -45,6 +48,8 @@ export interface GamePrediction {
   home_win_probability: number;
   predicted_home_margin: number | null;
   predicted_total?: number | null;
+  predicted_home_score?: number | null;
+  predicted_away_score?: number | null;
   predicted_at: string | null;
   /** Written strictly before kickoff. Only these are scored. */
   pregame: boolean;
@@ -139,28 +144,45 @@ export function marketProbability(
 }
 
 /**
+ * The pregame rule on any row type carrying predicted_at: the latest row written strictly
+ * before the start; failing that, the latest row at all, flagged not-pregame. Unknown
+ * start means pregame cannot be proven, so it is treated as not pregame.
+ */
+export function pickLatestPregameRow<T extends { predicted_at: any }>(
+  rows: T[], startMs: number | null,
+): { row: T; pregame: boolean } | null {
+  let best: { row: T; at: number } | null = null;
+  let latest: { row: T; at: number } | null = null;
+  for (const row of rows) {
+    const at = toMs(row.predicted_at) ?? -Infinity;
+    if (!latest || at > latest.at) latest = { row, at };
+    if (startMs != null && at < startMs && (!best || at > best.at)) best = { row, at };
+  }
+  const chosen = best || latest;
+  return chosen ? { row: chosen.row, pregame: Boolean(best) } : null;
+}
+
+/**
  * The prediction to show and score for one game: the latest row written before
  * kickoff; failing that, the latest row at all, flagged not-pregame. Unknown kickoff
  * means pregame cannot be proven, so it is treated as not pregame.
  */
 export function pickPrediction(rows: ModelRow[], kickoffMs: number | null): GamePrediction | null {
-  let best: { row: ModelRow; at: number } | null = null;
-  let latest: { row: ModelRow; at: number } | null = null;
-  for (const row of rows) {
-    if (finite(row.home_win_probability) == null) continue;
-    const at = toMs(row.predicted_at) ?? -Infinity;
-    if (!latest || at > latest.at) latest = { row, at };
-    if (kickoffMs != null && at < kickoffMs && (!best || at > best.at)) best = { row, at };
-  }
-  const chosen = best || latest;
+  const chosen = pickLatestPregameRow(
+    rows.filter((row) => finite(row.home_win_probability) != null), kickoffMs,
+  );
   if (!chosen) return null;
   return {
     home_win_probability: Number(chosen.row.home_win_probability),
     predicted_home_margin: finite(chosen.row.predicted_home_margin),
     ...(chosen.row.predicted_total !== undefined
       ? { predicted_total: finite(chosen.row.predicted_total) } : {}),
+    ...(chosen.row.predicted_home_score !== undefined
+      ? { predicted_home_score: finite(chosen.row.predicted_home_score) } : {}),
+    ...(chosen.row.predicted_away_score !== undefined
+      ? { predicted_away_score: finite(chosen.row.predicted_away_score) } : {}),
     predicted_at: toIso(chosen.row.predicted_at),
-    pregame: Boolean(best),
+    pregame: chosen.pregame,
     model_version: chosen.row.model_version ?? null,
   };
 }
