@@ -140,7 +140,8 @@ export const FOOTBALL_MODELS: Record<string, ModelSource[]> = {
       // planned/backtestOnly keep /api/models/nfl/compare from querying it; the unified
       // slate queries any model with a table and reports a missing one as available:false.
       planned: true, backtestOnly: true,
-      note: 'Research only: no live writer. Its measured record is the backtest below.',
+      note: 'Experimental shadow: ties the ridge on winners; its value is the score and '
+        + 'margin distributions. Live from 2026 week 3.',
     },
   ],
   cfb: [
@@ -162,6 +163,17 @@ export const FOOTBALL_MODELS: Record<string, ModelSource[]> = {
       key: 'xgb', label: 'XGBoost (legacy production)', role: 'production',
       table: 'game_predictions',
       outputs: ['win_prob'], learn: '/learn/football-models.html',
+    },
+    {
+      key: 'drive_sim', label: 'Drive simulator', role: 'shadow',
+      table: 'game_predictions_drive_sim', marginExpr: 'predicted_home_margin',
+      outputs: ['win_prob', 'score', 'total', 'margin', 'dist'],
+      learn: '/learn/football-drive-sim.html',
+      simDistributions: true,
+      // Not yet scored by /api/models/cfb/compare; the unified slate shows it.
+      planned: true, backtestOnly: true,
+      note: 'Experimental shadow: loses to the ridge, FPI and the market on winners '
+        + '(2025 holdout); its measured gain is the exact-margin shape. Live from 2026 week 4.',
     },
   ],
 };
