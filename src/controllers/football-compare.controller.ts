@@ -43,7 +43,9 @@ const table = (dataset: string, name: string) => `\`${PROJECT}.${dataset}.${name
  * prediction row's game_date is a date, not a kickoff), and college's from the
  * prediction row's game_date, which is ESPN's kickoff timestamp.
  */
-export function spineSql(sport: FootballSportConfig, hasDivision: boolean): string {
+export function spineSql(
+  sport: FootballSportConfig, hasDivision: boolean, detail = false,
+): string {
   const preds = table(sport.seasonDataset, sport.predictionsTable);
   const games = table(sport.histDataset, sport.gamesTable);
   const pickem = table(PICKEM_DATASET, 'games');
@@ -55,12 +57,28 @@ export function spineSql(sport: FootballSportConfig, hasDivision: boolean): stri
     : 'p.game_date';
   const lines = sport.linesTable
     ? `LEFT JOIN (
-         SELECT game_id, ANY_VALUE(spread_line) AS spread_line
+         SELECT game_id, ANY_VALUE(spread_line) AS spread_line${detail ? ', ANY_VALUE(total_line) AS total_line' : ''}
          FROM ${table(datasetFor(sport, sport.linesDataset), sport.linesTable)}
          GROUP BY game_id
        ) l ON l.game_id = p.game_id`
     : '';
   const spread = sport.linesTable ? 'l.spread_line' : 'g.spread_line';
+  // detail: the unified slate also needs team ids, display names, the total and the
+  // pick'em feed's live scores (nfl_historical.games only holds completed weeks).
+  const totalLine = sport.linesTable ? 'l.total_line' : 'g.total_line';
+  const detailP = detail
+    ? `ANY_VALUE(home_team_id) AS home_team_id, ANY_VALUE(away_team_id) AS away_team_id,
+             ${isNfl ? 'ANY_VALUE(spread_line) AS pred_spread_line,' : 'CAST(NULL AS FLOAT64) AS pred_spread_line,'}
+             ${isNfl ? 'ANY_VALUE(CAST(game_pk AS STRING))' : 'CAST(NULL AS STRING)'} AS game_pk,`
+    : '';
+  const detailSelect = detail
+    ? `p.home_team_id, p.away_team_id, p.game_pk,
+           pk.home_display, pk.away_display,
+           pk.home_score AS pk_home_score, pk.away_score AS pk_away_score,
+           pk.completed AS pk_completed,
+           COALESCE(${totalLine}, pk.total_line) AS total_line,
+           p.pred_spread_line,`
+    : '';
   const moneylines = isNfl
     ? 'g.home_moneyline, g.away_moneyline'
     : 'CAST(NULL AS FLOAT64) AS home_moneyline, CAST(NULL AS FLOAT64) AS away_moneyline';
@@ -72,12 +90,14 @@ export function spineSql(sport: FootballSportConfig, hasDivision: boolean): stri
              ${hasDivision ? 'ANY_VALUE(division)' : 'CAST(NULL AS STRING)'} AS division,
              ANY_VALUE(home_team_name) AS home_team_name,
              ANY_VALUE(away_team_name) AS away_team_name,
+             ${detailP}
              MIN(game_date) AS game_date
       FROM ${preds}
       WHERE season = @season ${hasDivision ? 'AND (@division IS NULL OR division = @division)' : ''}
       GROUP BY game_id
     )
     SELECT p.game_id, p.season, p.week, p.division, p.home_team_name, p.away_team_name,
+           ${detailSelect}
            g.home_score, g.away_score, g.home_won,
            COALESCE(pk.kickoff, ${kickoff}) AS kickoff,
            COALESCE(${spread}, pk.spread_line) AS spread_line,
