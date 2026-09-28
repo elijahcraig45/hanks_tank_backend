@@ -16,6 +16,7 @@ import footballRoutes from './routes/football.routes';
 import rankingsRoutes from './routes/rankings.routes';
 import modelsRoutes from './routes/models.routes';
 import pickemRoutes from './routes/pickem.routes';
+import seasonSimRoutes from './routes/season-sim.routes';
 import { validateGCPConfig } from './config/gcp.config';
 import { schedulerService } from './services/scheduler.service';
 
@@ -73,6 +74,7 @@ app.use('/api/football', footballRoutes); // NFL + CFB predictions, accuracy, se
 app.use('/api/rankings', rankingsRoutes); // Bradley-Terry power rankings, all sports
 app.use('/api/models', modelsRoutes); // Models section: every model per sport, scored pregame-only
 app.use('/api/pickem', pickemRoutes); // Pick'em contest: sheet, picks, leaderboard
+app.use('/api/season-sim', seasonSimRoutes); // Football rest-of-season Monte Carlo (shadow)
 app.use('/api/nfl', nflRoutes); // legacy alias for /api/football/nfl
 app.use('/api', legacyRoutes); // Legacy endpoints for backward compatibility
 
