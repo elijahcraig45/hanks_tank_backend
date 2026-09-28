@@ -20,6 +20,7 @@ import { rows, queue } from './helpers/bq-mock';
 import rankingsRoutes from '../routes/rankings.routes';
 import { cacheService } from '../services/cache.service';
 import { normalizeRankingRow } from '../controllers/rankings.controller';
+import { orderLabel } from '../utils/rankings-compare';
 
 let server: Server;
 let baseUrl: string;
@@ -139,6 +140,28 @@ const florida = {
   vs_next_json: null,
 };
 
+// Copied verbatim from PARITY_TEXT in hanks_tank_ml tests/test_rankings_explain.py, which
+// builds it from the same two rows with explain.pair_explanation. Change both together.
+const ML_PARITY_TEXT = 'LSU Tigers is 29.2 rating points (1.8 points of expected margin) above '
+  + 'Florida Gators; P(LSU Tigers wins at a neutral site) = 54%; +67.2 of the gap comes from '
+  + 'last season\'s games and −38.0 from this season\'s; they have not played each other '
+  + 'this season; common opponents: Ole Miss Rebels: LSU Tigers L 24-32, Florida Gators '
+  + 'W 52-28. LSU Tigers ranks ahead of Florida Gators in 56% of resamples (a coin flip).';
+
+describe('orderLabel', () => {
+  it('bands the displayed percentage the same way as explain.order_label', () => {
+    const cases: [number, string][] = [
+      [0.5, 'a coin flip'], [0.594, 'a coin flip'], [0.595, 'a slight edge'],
+      [0.6, 'a slight edge'], [0.744, 'a slight edge'], [0.745, 'a clear edge'],
+      [0.894, 'a clear edge'], [0.895, 'separated'], [1.0, 'separated'],
+      [0.41, 'a coin flip'], [0.4, 'a slight edge the other way'],
+      [0.31, 'a slight edge the other way'], [0.2, 'a clear edge the other way'],
+      [0.05, 'separated the other way'],
+    ];
+    for (const [p, label] of cases) expect([p, orderLabel(p)]).toEqual([p, label]);
+  });
+});
+
 describe('GET /api/rankings/:sport/compare', () => {
   it('explains the higher-rated team first, whichever order it was asked in', async () => {
     queue(rows([florida, lsu]));
@@ -162,7 +185,10 @@ describe('GET /api/rankings/:sport/compare', () => {
     expect(pair.p_order).toBe(0.565);
     expect(pair.tied).toBe(true);
     expect(pair.tie_basis).toBe('bootstrap_order');
-    expect(pair.text).toMatch(/Statistically tied/);
+    expect(pair.order_label).toBe('a coin flip');
+    // Must equal the ML job's text for the same two rows, character for character:
+    // PARITY_TEXT in hanks_tank_ml tests/test_rankings_explain.py.
+    expect(pair.text).toBe(ML_PARITY_TEXT);
     expect(body.meta.has_rationale).toBe(true);
   });
 
@@ -175,6 +201,8 @@ describe('GET /api/rankings/:sport/compare', () => {
     expect(body.data.p_order).toBeNull();
     expect(body.data.tie_basis).toBe('rank_bands');
     expect(body.data.tied).toBe(false);
+    expect(body.data.order_label).toBeNull();
+    expect(body.data.text).not.toMatch(/resamples/);
   });
 
   it('reports head to head from the higher team\'s side', async () => {
