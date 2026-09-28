@@ -25,7 +25,7 @@ import { cacheService } from '../services/cache.service';
 import { mlbApi } from '../services/mlb-api.service';
 import {
   consensusOf, csvField, disagreementLevel, exportFilename, toCsv, SLATE_CSV_HEADERS,
-  distFromRow,
+  distFromRow, buildPrediction,
 } from '../utils/unified-slate';
 import { pickPlayerRows } from '../controllers/unified-predictions.controller';
 
@@ -533,5 +533,23 @@ describe('unified-slate helpers', () => {
     expect(distFromRow({ home_points_mean: 24.1, home_points_p50: 24 }, ['home_runs', 'home_points'], 5000))
       .toEqual(expect.objectContaining({ mean: 24.1, p50: 24, sd: null, n: 5000 }));
     expect(distFromRow({}, ['home_runs'], 1)).toBeNull();
+  });
+});
+
+describe('margin_exact pass-through', () => {
+  it('keeps every stored key, tail buckets included, and the mass still sums to 1', () => {
+    const exact: Record<string, number> = { '<=-61': 0.004, '>=61': 0.006 };
+    for (let k = -60; k <= 60; k += 1) exact[String(k)] = 0.99 / 121;
+    const p = buildPrediction(null, {
+      row: { game_id: 'g', n_sims: 4000, p_home_win: 0.6, margin_exact: JSON.stringify(exact),
+        predicted_at: { value: '2026-09-27T10:00:00Z' } } as any,
+      pregame: true,
+    });
+    const me = p!.extras!.margin_exact;
+    expect(Object.keys(me)).toHaveLength(123);
+    expect(me['<=-61']).toBe(0.004);
+    expect(me['>=61']).toBe(0.006);
+    const sum = Object.values(me as Record<string, number>).reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(1, 9);
   });
 });

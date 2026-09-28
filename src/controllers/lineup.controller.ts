@@ -45,7 +45,7 @@ export class LineupController {
     }
 
     try {
-      const taskName = await lineupSchedulerService.schedulePregameTask({
+      const { name: taskName } = await lineupSchedulerService.schedulePregameTask({
         game_pks,
         game_date,
         delay_seconds: delay_seconds ?? 0,
@@ -72,8 +72,8 @@ export class LineupController {
   /**
    * GET /api/lineup/schedule-today
    * Fetches today's schedule from MLB API and schedules per-game Cloud Tasks.
-   * Safe to call multiple times (duplicate tasks won't cause double-predictions
-   * since the ML pipeline uses upsert logic).
+   * Safe to call multiple times: tasks are named deterministically, so a repeat call
+   * is reported as `deduped` and enqueues nothing (it is called twice every morning).
    */
   async scheduleToday(req: Request, res: Response): Promise<void> {
     const dateParam = (req.query.date as string) || new Date().toISOString().slice(0, 10);
