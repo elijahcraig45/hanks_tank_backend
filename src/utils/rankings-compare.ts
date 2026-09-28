@@ -10,7 +10,8 @@
  * One difference from the stored pairs: the bootstrap replicates are not persisted,
  * so an arbitrary pair has no `p_order` unless it is adjacent (then the stored one is
  * reused). Without it, "tied" is decided from the rank bands: each team's point rank
- * inside the other's 5-95% band.
+ * inside the other's 5-95% band, and the text says the ranges overlap instead of quoting
+ * a share it does not have.
  */
 
 export interface RankingGame {
@@ -34,6 +35,31 @@ export interface OpponentSummary {
 }
 
 const TIE_ORDER_P = 0.75;
+
+/**
+ * How firmly one team sits above another, from p = the share of bootstrap resamples
+ * rating it higher. Same table as ORDER_BANDS in the ML repo's explain.py; keep them
+ * identical. Banded on the displayed whole percentage:
+ *   under 60% "a coin flip"; 60-74% "a slight edge"; 75-89% "a clear edge";
+ *   90%+ "separated". Symmetric around 50: 40% and under reads as the band of 100 - p
+ *   plus "the other way", because the resamples can disagree with the point rank.
+ */
+const ORDER_BANDS: [number, string][] = [
+  [90, 'separated'], [75, 'a clear edge'], [60, 'a slight edge'],
+];
+const ORDER_COIN_FLIP = 'a coin flip';
+
+/** Percent rounded half up, matching _pct() in explain.py. */
+const pct = (p: number): number => Math.round(p * 100);
+
+export function orderLabel(p: number): string {
+  const shown = pct(p);
+  const stronger = Math.max(shown, 100 - shown);
+  for (const [floor, label] of ORDER_BANDS) {
+    if (stronger >= floor) return shown >= 50 ? label : `${label} the other way`;
+  }
+  return ORDER_COIN_FLIP;
+}
 const MAX_COMMON_LISTED = 6;
 
 const round = (v: number | null | undefined, digits = 1): number | null => {
@@ -93,7 +119,7 @@ export function pairText(p: Record<string, any>, sport: string): string {
     : `${p.gap.toFixed(1)} rating points`;
   const parts = [
     `${p.a} is ${unit} above ${p.b}; P(${p.a} wins at a neutral site) = `
-      + `${Math.round(p.p_a_wins_neutral * 100)}%`,
+      + `${pct(p.p_a_wins_neutral)}%`,
   ];
   if (p.gap_from_prior != null && p.gap_from_current != null) {
     parts.push(`${signed(p.gap_from_prior)} of the gap comes from last season's games `
@@ -115,11 +141,12 @@ export function pairText(p: Record<string, any>, sport: string): string {
       + `and ${p.b} ${totals.b_w}-${totals.b_l}`);
   }
   let text = `${parts.join('; ')}.`;
-  if (p.tied) {
-    text += p.p_order != null
-      ? ` Statistically tied: the bootstrap resamples keep this order only `
-        + `${Math.round(p.p_order * 100)}% of the time.`
-      : ' Statistically tied: each rank sits inside the other\'s 5-95% range.';
+  if (p.p_order != null) {
+    text += ` ${p.a} ranks ahead of ${p.b} in ${pct(p.p_order)}% of resamples `
+      + `(${orderLabel(p.p_order)}).`;
+  } else if (p.tied) {
+    // Non-adjacent pair: no stored resample share, so say only what the bands show.
+    text += ' Their rank ranges overlap: each rank sits inside the other\'s 5-95% range.';
   }
   return text;
 }
@@ -154,6 +181,7 @@ export function comparePair(
     p_a_wins_neutral: round(winProb(a.rating, b.rating), 3),
     p_order: pOrder,
     tied,
+    order_label: pOrder != null ? orderLabel(pOrder) : null,
     tie_basis: pOrder != null ? 'bootstrap_order' : (sameBoard ? 'rank_bands' : null),
     gap_from_prior: diff('rating_from_prior'),
     gap_from_current: diff('rating_from_current'),
