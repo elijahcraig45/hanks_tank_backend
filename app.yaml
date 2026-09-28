@@ -44,6 +44,9 @@ env_variables:
   ML_FUNCTION_URL: https://mlb-2026-daily-pipeline-127033547664.us-central1.run.app
   # Separate 4 GiB function for the PA-simulator shadow; unset disables its per-game task.
   SIM_BLEND_FUNCTION_URL: https://mlb-2026-sim-blend-127033547664.us-central1.run.app
+  # Its own Cloud Tasks queue (created by deploy_sim_blend.sh: 2 concurrent dispatches for
+  # a 3-instance function), so the shadow never shares or delays lineup-pregame.
+  SIM_BLEND_TASK_QUEUE: sim-blend
   LINEUP_TASK_QUEUE: lineup-pregame
   TASK_QUEUE_LOCATION: us-central1
 
