@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
 import { isMissingTable } from '../utils/football-request';
 import { getRankingSport, RankingSportConfig } from '../config/rankings.config';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
+import { comparePair } from '../utils/rankings-compare';
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
 const bigquery = new BigQuery({ projectId: PROJECT });
@@ -26,12 +27,42 @@ function datasetFor(sport: RankingSportConfig): string {
 // which the frontend would otherwise receive as objects.
 const TEMPORAL_COLUMNS = ['computed_at', 'as_of_date'] as const;
 
+// Rationale columns the ML job stores as JSON text (BigQuery STRING). Served parsed,
+// under the name without the suffix, so the frontend never handles raw JSON strings.
+const JSON_COLUMNS: Record<string, string> = {
+  why_json: 'why',
+  games_json: 'games',
+  vs_next_json: 'vs_next',
+};
+
+function parseJson(value: unknown): unknown {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeRankingRow(row: Record<string, any>): Record<string, any> {
   const out = { ...row };
   for (const column of TEMPORAL_COLUMNS) {
     if (column in out) out[column] = normalizeBigQueryTemporalValue(out[column]);
   }
+  for (const [column, name] of Object.entries(JSON_COLUMNS)) {
+    if (column in out) {
+      out[name] = parseJson(out[column]);
+      delete out[column];
+    }
+  }
   return out;
+}
+
+function seasonOf(req: Request): number {
+  const requested = parseInt((req.query.season as string) || '', 10);
+  return Number.isFinite(requested)
+    ? requested
+    : parseInt(process.env.CURRENT_SEASON || '', 10) || new Date().getFullYear();
 }
 
 // What the rating is fitted on. Older tables carry no `model` column; they were all
@@ -67,10 +98,7 @@ export async function getRankings(req: Request, res: Response): Promise<void> {
   // Defaults rather than 400s on a missing season: /api/football/:sport/rankings
   // already shipped with a default, and this handler took that path over, so
   // rejecting the omission would break existing callers.
-  const requestedSeason = parseInt((req.query.season as string) || '', 10);
-  const season = Number.isFinite(requestedSeason)
-    ? requestedSeason
-    : parseInt(process.env.CURRENT_SEASON || '', 10) || new Date().getFullYear();
+  const season = seasonOf(req);
 
   const limit = Math.min(
     parseInt((req.query.limit as string) || '50', 10) || 50,
@@ -153,6 +181,81 @@ export async function getRankings(req: Request, res: Response): Promise<void> {
     res.status(500).json({
       success: false,
       error: { code: 'RANKINGS_ERROR', message: 'Failed to load power rankings' },
+    });
+  }
+}
+
+/**
+ * GET /api/rankings/:sport/compare?a=<team>&b=<team>&season=
+ *
+ * Why one team rates above another, for any two teams on the latest board (either
+ * college division). Computed from the two rows' stored rationale fields; see
+ * utils/rankings-compare.ts. The higher-rated team is always returned as `a`.
+ */
+export async function compareRankings(req: Request, res: Response): Promise<void> {
+  const key = (req.params.sport || '').toLowerCase();
+  const sport = getRankingSport(key);
+  if (!sport) {
+    res.status(404).json({
+      success: false,
+      error: { code: 'UNKNOWN_SPORT', message: `No rankings for sport: ${key}` },
+    });
+    return;
+  }
+
+  const a = String(req.query.a || '').trim();
+  const b = String(req.query.b || '').trim();
+  if (!a || !b || a === b) {
+    res.status(400).json({
+      success: false,
+      error: { code: 'BAD_PAIR', message: 'Pass two different teams as ?a=&b=' },
+    });
+    return;
+  }
+
+  const season = seasonOf(req);
+  const table = `${PROJECT}.${datasetFor(sport)}.${sport.table}`;
+  const sql = `
+    SELECT * FROM \`${table}\`
+    WHERE season = @season AND team IN UNNEST(@teams)
+      AND as_of_week = (
+        SELECT MAX(as_of_week) FROM \`${table}\` WHERE season = @season
+      )
+  `;
+
+  try {
+    const [raw] = await bigquery.query({ query: sql, params: { season, teams: [a, b] } });
+    const rows = (raw as Record<string, any>[]).map(normalizeRankingRow);
+    const rowA = rows.find((r) => r.team === a);
+    const rowB = rows.find((r) => r.team === b);
+    if (!rowA || !rowB) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'TEAM_NOT_FOUND',
+          message: `Not on the ${season} board: ${[!rowA && a, !rowB && b].filter(Boolean).join(', ')}`,
+        },
+      });
+      return;
+    }
+    const hasRationale = rowA.rating_from_prior != null && rowB.rating_from_prior != null;
+    res.json({
+      success: true,
+      data: comparePair(rowA, rowB, sport.key),
+      meta: {
+        sport: sport.key,
+        season,
+        as_of_week: rowA.as_of_week ?? null,
+        // Boards built before the rationale columns existed still compare on rating,
+        // but have no prior/current split, games or schedule rank to draw on.
+        has_rationale: hasRationale,
+      },
+    });
+  } catch (error: any) {
+    logger.error('power rankings compare failed', { sport: sport.key, error: error.message });
+    res.status(500).json({
+      success: false,
+      error: { code: 'RANKINGS_ERROR', message: 'Failed to compare teams' },
     });
   }
 }
