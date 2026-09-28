@@ -15,10 +15,11 @@
  * kickoff is shown, flagged, and never scored.
  *
  * EXTENSION POINT: a new model is one entry here plus a description card in the
- * frontend's config/footballModels.js. The drive simulation being built alongside this
- * is pre-registered as `planned`: it is listed (so the page can say it is coming) but
- * not queried. When its writer lands, point `table` at it, drop `planned`, and it is
- * scored like everything else — no controller change.
+ * frontend's config/footballModels.js. A model whose writer has not landed yet can be
+ * pre-registered as `planned`: listed (so the page can say it is coming) but not
+ * queried. When its writer lands, drop `planned` and it is scored like everything else —
+ * no controller change. The drive simulation went through exactly that: live from 2026
+ * week 3 (NFL) and week 4 (CFB).
  *
  * The betting market is not in this list: it has no predictions table. It is derived
  * from the lines already stored with each game (see marketProbability).
@@ -66,7 +67,6 @@ export const COMPARE_MODELS: CompareModelSource[] = [
     table: 'game_predictions_drive_sim',
     hasMargin: true,
     sports: ['nfl', 'cfb'],
-    planned: true,
   },
 ];
 

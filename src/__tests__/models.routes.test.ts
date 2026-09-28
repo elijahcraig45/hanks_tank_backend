@@ -136,9 +136,14 @@ describe('GET /api/models/:sport/compare (football)', () => {
     spread_line: -3, home_moneyline: 140, away_moneyline: -160,
   };
 
-  it('adds the market, lists the planned drive sim, and notes missing shadow tables', async () => {
+  it('adds the market, scores the live drive sim, and notes missing shadow tables', async () => {
     routeQueries([
       [/WITH p AS/, [[spineRow]]],
+      [/game_predictions_drive_sim/, [[{
+        game_id: '2026_03_BUF_MIA', home_win_probability: 0.40, predicted_home_margin: -2.5,
+        predicted_total: 44.1, predicted_at: { value: '2026-09-18T10:00:00Z' },
+        model_version: 'drive_sim_v1',
+      }]]],
       [/game_predictions_ridge_shadow/, () => { throw new Error('Not found: Table x.ridge'); }],
       [/fpi_game_predictions/, () => { throw new Error('Not found: Table x.fpi'); }],
       [/game_predictions`/, [[{
@@ -152,15 +157,19 @@ describe('GET /api/models/:sport/compare (football)', () => {
     const byKey = Object.fromEntries(d.models.map((m: any) => [m.key, m]));
     expect(byKey.market.available).toBe(true);
     expect(byKey.market.role).toBe('benchmark');
-    expect(byKey.drive_sim.planned).toBe(true);
-    expect(byKey.drive_sim.backtest_only).toBe(true);
+    expect(byKey.drive_sim.planned).toBe(false);
+    expect(byKey.drive_sim.backtest_only).toBe(false);
+    expect(byKey.drive_sim.available).toBe(true);
+    expect(byKey.drive_sim.rows).toBe(1);
+    expect(d.games[0].predictions.drive_sim.home_win_probability).toBe(0.4);
+    expect(d.games[0].predictions.drive_sim.pregame).toBe(true);
     expect(byKey.ridge.available).toBe(false);
     expect(d.reference).toBe('market');
     expect(d.window.week).toBe(3);
     expect(d.games[0].predictions.market.basis).toBe('moneyline');
-    expect(d.scoreboard.head_to_head.models).toEqual(['market', 'xgb']);
+    expect(d.scoreboard.head_to_head.models).toEqual(['market', 'xgb', 'drive_sim']);
     expect(d.backtest.sport).toBe('nfl');
-    expect(sentQueries().some((q) => /drive_sim/.test(q))).toBe(false);
+    expect(d.scoreboard.per_model.find((r: any) => r.model === 'drive_sim').n).toBe(1);
   });
 
   it('labels the college backtest as FBS-only on the FCS board', async () => {

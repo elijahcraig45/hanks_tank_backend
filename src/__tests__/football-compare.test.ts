@@ -40,6 +40,14 @@ const game = (over: Partial<SpineRow> = {}): SpineRow => ({
 });
 
 describe('pickPrediction', () => {
+  it('keeps one row when the writer duplicated a snapshot (2026-09-26/27 sim_blend twins)', () => {
+    const twin = { game_id: 'g1', home_win_probability: 0.58, predicted_at: before(1.5) };
+    const p = pickPrediction([twin, { ...twin }, { ...twin, predicted_at: before(1.45) }],
+      Date.parse(KICK));
+    expect(p?.home_win_probability).toBe(0.58);
+    expect(p?.predicted_at).toBe(before(1.45));
+  });
+
   it('prefers the latest pregame row over a later backfill', () => {
     const p = pickPrediction([
       { game_id: 'g1', home_win_probability: 0.55, predicted_at: before(72) },
@@ -170,9 +178,10 @@ describe('buildComparison + scoring', () => {
 });
 
 describe('model registry', () => {
-  it('pre-registers the drive simulation as planned, with the shared contract', () => {
+  it('scores the live drive simulation through the shared contract', () => {
     const sim = COMPARE_MODELS.find((m) => m.key === 'drive_sim');
-    expect(sim?.planned).toBe(true);
+    expect(sim?.planned).toBeFalsy();
+    expect(sim?.table).toBe('game_predictions_drive_sim');
     expect(sim?.hasMargin).toBe(true);
   });
 });
@@ -223,6 +232,10 @@ describe('GET /:sport/models/compare', () => {
         throw new Error('Not found: Table hankstank:cfb_season.fpi_game_predictions');
       }],
       [/ridge_shadow/, [[]]],
+      [/game_predictions_drive_sim/, [[{
+        game_id: '401858467', home_win_probability: 0.2, predicted_home_margin: -14.5,
+        predicted_at: { value: '2026-09-25T10:00:00.000Z' }, model_version: 'cfb_drive_sim_v1',
+      }]]],
     ]);
 
     const { status, body } = await get('/api/football/cfb/models/compare?season=2026&division=fbs');
@@ -240,15 +253,20 @@ describe('GET /:sport/models/compare', () => {
     expect(byKey.fpi.available).toBe(false);
     expect(byKey.fpi.note).toMatch(/not been created/);
     expect(byKey.ridge.available).toBe(false);
-    expect(byKey.drive_sim.planned).toBe(true);
+    expect(byKey.drive_sim.planned).toBe(false);
+    expect(byKey.drive_sim.available).toBe(true);
+    expect(byKey.drive_sim.rows).toBe(1);
     expect(byKey.market.available).toBe(true);
 
     const xgb = d.scoreboard.per_model.find((s: any) => s.model === 'xgb');
     expect(xgb.games).toBe(1);
     expect(xgb.accuracy).toBe(1);
 
-    // The planned model is never queried.
-    expect(sentQueries().some((q) => /drive_sim/.test(q))).toBe(false);
+    // The drive sim is live now: queried and scored like the others.
+    expect(sentQueries().some((q) => /game_predictions_drive_sim/.test(q))).toBe(true);
+    const sim = d.scoreboard.per_model.find((s: any) => s.model === 'drive_sim');
+    expect(sim.games).toBe(1);
+    expect(sim.accuracy).toBe(1);
     // Every model query is season-scoped and parameterised.
     expect(sentQueries().filter((q) => /home_win_probability/.test(q))
       .every((q) => /season = @season/.test(q))).toBe(true);
