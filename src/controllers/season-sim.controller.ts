@@ -4,11 +4,16 @@
  *   GET /api/season-sim/:sport?season=&week=                 sport = nfl | cfb
  *       -> { success, data: { teams, bracket }, meta: { sport, season, as_of_week,
  *            computed_at, n_sims, model_version, available_weeks, source, method_url } }
- *   GET /api/season-sim/:sport/export?season=&week=&table=team|bracket&format=csv|json
+ *   GET /api/season-sim/:sport/team/:team?season=&week=
+ *       -> { success, data: { team, games }, meta }: one team's row plus its remaining
+ *          games, each with the team's side of it (opponent, site, p_win, margin, label,
+ *          projected_win). meta is the slice meta, plus `note` if the games table is absent.
+ *   GET /api/season-sim/:sport/export?season=&week=&table=team|bracket|games&format=csv|json
  *       -> CSV attachment, or a bare JSON array
  *
- * Tables: `${seasonDataset}.season_sim_team` and `season_sim_bracket` (nfl_season /
- * cfb_season). The ML `season_sim` mode is the only writer; a rerun of a
+ * Tables: `${seasonDataset}.season_sim_team`, `season_sim_bracket` and `season_sim_games`
+ * (nfl_season / cfb_season). The games table is read only by the team route and the
+ * export (the whole-league view does not need 557 CFB game rows). The ML `season_sim` mode is the only writer; a rerun of a
  * (season, as_of_week) appends a new computed_at, so every read takes the latest
  * computed_at for the slice it serves.
  *
@@ -60,6 +65,14 @@ export const TEAM_COLUMNS = [
   'p_division', 'p_conf_game', 'p_conf_title', 'p_playoffs', 'p_bye', 'p_seed',
   'p_quarters', 'p_semis', 'p_final', 'p_champion',
   'exp_final_rank', 'rank_p10', 'rank_p90',
+  'rem_wins_mean', 'rem_wins_dist', 'projected_wins_games', 'modal_sequence',
+  'modal_sequence_freq', 'modal_sequence_record_p',
+];
+
+export const GAME_COLUMNS = [
+  'sport', 'season', 'as_of_week', 'computed_at', 'model_version', 'n_sims',
+  'game_id', 'week', 'game_date', 'home', 'away', 'home_name', 'away_name', 'neutral',
+  'p_home_win', 'margin_mean', 'margin_p10', 'margin_p90',
 ];
 
 export const BRACKET_COLUMNS = [
@@ -259,6 +272,124 @@ export async function loadSeasonSim(
   return slice;
 }
 
+/* ── per-game rows ───────────────────────────────────────────────────── */
+
+export interface SeasonSimGames {
+  games: any[];
+  note?: string;
+}
+
+/** Order the games table the way a schedule reads. */
+const GAMES_ORDER = 'week, game_date, game_id';
+
+async function loadGamesFromBigQuery(
+  sport: FootballSportConfig, season: number, week: number,
+): Promise<SeasonSimGames> {
+  try {
+    const [rows] = await bigquery.query({
+      query: sliceRowsSql(table(sport.seasonDataset, 'season_sim_games'), GAMES_ORDER),
+      params: { season, week },
+    });
+    return { games: (rows as any[]).map(normalizeSimRow) };
+  } catch (error: any) {
+    if (!isMissingTable(error)) throw error;
+    return { games: [], note: 'Per-game table not available yet.' };
+  }
+}
+
+async function loadGamesFromFixture(
+  dir: string, sport: FootballSportConfig, season: number, week: number,
+): Promise<SeasonSimGames> {
+  try {
+    const doc = JSON.parse(await fs.readFile(path.join(dir, `season_sim_${sport.key}.json`), 'utf8'));
+    if (!Array.isArray(doc.games)) return { games: [], note: 'Per-game table not available yet.' };
+    const match = (r: any) => (r.season == null || Number(r.season) === season)
+      && (r.as_of_week == null || Number(r.as_of_week) === week);
+    return { games: doc.games.filter(match).map(normalizeSimRow) };
+  } catch {
+    return { games: [], note: 'Per-game table not available yet.' };
+  }
+}
+
+/** Every remaining game of one resolved slice, cached like the slice itself. */
+export async function loadSeasonSimGames(
+  sport: FootballSportConfig, season: number, week: number,
+): Promise<SeasonSimGames> {
+  const dir = process.env.SEASON_SIM_FIXTURE_DIR;
+  if (dir) return loadGamesFromFixture(dir, sport, season, week);
+  const key = getCacheKey(`ssim-games:${sport.key}`, { season, week });
+  const hit = await cacheService.get<SeasonSimGames>(key);
+  if (hit) return hit;
+  const out = await loadGamesFromBigQuery(sport, season, week);
+  try {
+    if (!out.note && Buffer.byteLength(JSON.stringify(out)) <= MAX_CACHED_BYTES) {
+      void cacheService.set(key, out, SEASON_SIM_TTL);
+    }
+  } catch (error: any) {
+    logger.debug('season sim: games cache write failed', { key, error: error?.message });
+  }
+  return out;
+}
+
+/** The label thresholds the page shows: P(win) >= .65 likely, .55 lean, .45-.55 toss-up. */
+export function winLabel(p: number | null | undefined): string | null {
+  if (p == null || !Number.isFinite(Number(p))) return null;
+  const x = Number(p);
+  if (x >= 0.65) return 'Likely W';
+  if (x >= 0.55) return 'Lean W';
+  if (x > 0.45) return 'Toss-up';
+  if (x > 0.35) return 'Lean L';
+  return 'Likely L';
+}
+
+const num = (v: any): number | null => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
+function parseJsonList(v: any): any[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v !== 'string' || !v) return [];
+  try {
+    const out = JSON.parse(v);
+    return Array.isArray(out) ? out : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A game from `team`'s side: opponent, site, and P(win)/margin flipped when it is away.
+ * The margin percentiles swap too (the away side's 10th percentile is minus the home
+ * side's 90th).
+ */
+export function teamView(game: any, team: string, projected: Set<string>): any {
+  const home = game.home === team;
+  const pHome = num(game.p_home_win);
+  const m = num(game.margin_mean);
+  const p10 = num(game.margin_p10);
+  const p90 = num(game.margin_p90);
+  const flip = (v: number | null) => (v == null ? null : -v);
+  const pWin = pHome == null ? null : (home ? pHome : 1 - pHome);
+  return {
+    ...game,
+    opponent: home ? game.away : game.home,
+    opponent_name: home ? game.away_name : game.home_name,
+    site: game.neutral === true || game.neutral === 'true' ? 'neutral' : (home ? 'home' : 'away'),
+    is_home: home,
+    p_win: pWin,
+    margin: home ? m : flip(m),
+    margin_p10: home ? p10 : flip(p90),
+    margin_p90: home ? p90 : flip(p10),
+    label: winLabel(pWin),
+    projected_win: projected.has(String(game.game_id)),
+  };
+}
+
+/** Case-insensitive team lookup by the team key the table uses (NFL code / ESPN abbr). */
+export function findTeam(teams: any[], key: string): any | undefined {
+  const k = key.trim();
+  return teams.find((t) => t.team === k)
+    ?? teams.find((t) => String(t.team).toLowerCase() === k.toLowerCase());
+}
+
 /* ── handlers ────────────────────────────────────────────────────────── */
 
 function fail(res: Response, status: number, code: string, message: string) {
@@ -283,14 +414,14 @@ function parseRequest(req: Request, res: Response) {
 }
 
 async function withSlice(
-  req: Request, res: Response, respond: (s: SeasonSimSlice) => void,
+  req: Request, res: Response, respond: (s: SeasonSimSlice) => void | Promise<void>,
 ): Promise<void> {
   const parsed = parseRequest(req, res);
   if (!parsed) return;
   try {
     const slice = await loadSeasonSim(parsed.sport, parsed.season, parsed.week);
     res.set('Cache-Control', `public, max-age=${slice.meta.source === 'fixture' ? 0 : SEASON_SIM_TTL}`);
-    respond(slice);
+    await respond(slice);
   } catch (error: any) {
     if (error instanceof NotFound) {
       fail(res, 404, 'NOT_AVAILABLE', error.message);
@@ -307,24 +438,53 @@ export async function getSeasonSim(req: Request, res: Response): Promise<void> {
   });
 }
 
+export async function getSeasonSimTeam(req: Request, res: Response): Promise<void> {
+  const key = String(req.params.team || '');
+  if (!key || key.length > 40) {
+    fail(res, 400, 'BAD_REQUEST', 'team is required');
+    return;
+  }
+  await withSlice(req, res, async (s) => {
+    const team = findTeam(s.teams, key);
+    if (!team) {
+      fail(res, 404, 'UNKNOWN_TEAM', `No team "${key}" in this simulation.`);
+      return;
+    }
+    const { games, note } = await loadSeasonSimGames(
+      getFootballSport(s.meta.sport)!, Number(s.meta.season), Number(s.meta.as_of_week));
+    const projected = new Set(parseJsonList(team.projected_wins_games).map(String));
+    const mine = games
+      .filter((g) => g.home === team.team || g.away === team.team)
+      .map((g) => teamView(g, team.team, projected));
+    res.json({
+      success: true,
+      data: { team, games: mine },
+      meta: { ...s.meta, ...(note ? { note } : {}) },
+    });
+  });
+}
+
 export async function exportSeasonSim(req: Request, res: Response): Promise<void> {
   const which = String(req.query.table || 'team').toLowerCase();
   const format = String(req.query.format || 'csv').toLowerCase();
-  if (which !== 'team' && which !== 'bracket') {
-    fail(res, 400, 'BAD_REQUEST', 'table must be team or bracket');
+  if (which !== 'team' && which !== 'bracket' && which !== 'games') {
+    fail(res, 400, 'BAD_REQUEST', 'table must be team, bracket or games');
     return;
   }
   if (format !== 'csv' && format !== 'json') {
     fail(res, 400, 'BAD_FORMAT', 'format must be csv or json');
     return;
   }
-  await withSlice(req, res, (s) => {
-    const rows = which === 'team' ? s.teams : s.bracket;
+  await withSlice(req, res, async (s) => {
+    const rows = which === 'team' ? s.teams
+      : which === 'bracket' ? s.bracket
+        : (await loadSeasonSimGames(getFootballSport(s.meta.sport)!,
+          Number(s.meta.season), Number(s.meta.as_of_week))).games;
     if (format === 'json') {
       res.json(rows);
       return;
     }
-    const known = which === 'team' ? TEAM_COLUMNS : BRACKET_COLUMNS;
+    const known = which === 'team' ? TEAM_COLUMNS : which === 'bracket' ? BRACKET_COLUMNS : GAME_COLUMNS;
     // Keep the contract's column order; append anything newer the ML side adds.
     const extra = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => !known.includes(k));
     const filename = `season_sim_${s.meta.sport}_${s.meta.season}_wk${s.meta.as_of_week}_${which}.csv`;
