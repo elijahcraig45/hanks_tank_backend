@@ -45,6 +45,22 @@ React SPA / browser clients
 | Transactions | `GET /api/transactions`, `GET /api/team/:teamAbbr/transactions` |
 | News | `GET /api/mlb-news`, `GET /api/braves-news`, `POST /api/news/refresh` |
 
+## Model control (read-only)
+
+The site reads a small control view written only by the private lab (`mllab`): which models to
+show, label / note / order overrides and a per-sport banner. Contract: `mllab/docs/MODEL_CONTROL.md`.
+
+- Read: `SELECT * FROM hankstank.<CONTROL_DATASET>.model_control_current WHERE sport IN (...) OR sport = '*'`
+  (`services/model-control.service.ts`). `CONTROL_DATASET` defaults to `control`.
+- Cached 30 s per instance per sport; 2.5 s timeout; one query for all sports from `GET /api/site-status`.
+- Fails open: any error, timeout or empty view means no overrides (`available: false`, `version: 'none'`), with one
+  WARNING per failed read. The backend never writes control data and has no admin endpoint.
+- Hidden models are removed from `/api/models/:sport/compare`, `/api/predictions/:sport/slate`, the legacy
+  `/api/football/:sport/models/compare`, and (production key hidden) the legacy prediction endpoints return the games
+  with prediction fields null and `hidden: true`.
+- The control `version` is part of those routes' cache keys, and browser/edge `Cache-Control` max-age is capped at 60 s.
+- `GET /api/site-status` returns `{ generated_at, control_available, sports: { mlb|nfl|cfb: { banner } } }`, max-age 30.
+
 ## Production footprint
 
 | Resource | Notes |

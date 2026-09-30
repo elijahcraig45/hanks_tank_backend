@@ -32,6 +32,8 @@ import { getCacheKey } from '../utils/cache-keys';
 import { getFootballSport, FootballSportConfig } from '../config/football.config';
 import { MLB_DATASET, ModelSource, modelsForSport } from '../config/models.config';
 import { isMissingTable } from '../utils/football-request';
+import { ControlState, getControl } from '../services/model-control.service';
+import { applyControl, featuredDefault, isHidden } from '../utils/model-overlay';
 import {
   ModelRow, SpineRow, defaultWeek, marketProbability, pickPrediction, pickLatestPregameRow,
 } from '../utils/football-compare';
@@ -61,6 +63,9 @@ export const RULE = 'Per game and model: the latest prediction written strictly 
   + 'predictions of available models only.';
 
 type Format = 'envelope' | 'json' | 'csv';
+
+/** Browser/edge max-age cap for the slate, so a control-plane hide shows within a minute. */
+const CONTROL_MAX_AGE = 60;
 
 const todayEt = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 const isDate = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
@@ -113,19 +118,19 @@ function entryFor(m: ModelSource, loaded: { rows: any[]; missing: boolean } | nu
     learn: m.learn ?? null,
   };
   if (!m.table || !loaded) {
-    return { ...base, available: false, rows: 0, note: m.note || 'No live source for this model.' };
+    return { ...base, available: false, rows: 0, note: m.noteOverride ?? (m.note || 'No live source for this model.') };
   }
   if (loaded.missing && (simMissing ?? true)) {
     return {
       ...base, available: false, rows: 0,
-      note: `Not live yet: ${datasetName}.${m.table} has not been created.`,
+      note: m.noteOverride ?? `Not live yet: ${datasetName}.${m.table} has not been created.`,
     };
   }
   return {
     ...base,
     available: true,
     rows: loaded.rows.length,
-    note: loaded.rows.length ? null : 'No predictions for this slate yet.',
+    note: m.noteOverride ?? (loaded.rows.length ? null : 'No predictions for this slate yet.'),
   };
 }
 
@@ -271,8 +276,10 @@ export function mergeMlbSpine(bqRows: any[], schedule: any | null, nowMs = Date.
     || x.game_id.localeCompare(y.game_id));
 }
 
-async function buildMlbSlate(date: string) {
-  const models = modelsForSport('mlb') as ModelSource[];
+async function buildMlbSlate(date: string, control: ControlState) {
+  // Control plane overlay: hidden models never reach models[], predictions{} or the
+  // consensus; the games (spine) are unaffected. Identity when control is unavailable.
+  const models = applyControl(modelsForSport('mlb') as ModelSource[], control);
   const season = Number(date.slice(0, 4));
   const dateParams = { date };
   const withTable = models.filter((m) => m.table);
@@ -325,7 +332,7 @@ async function buildMlbSlate(date: string) {
       season,
       week: null,
       models: entries,
-      featured_default: models.find((m) => m.role === 'production')?.key ?? null,
+      featured_default: featuredDefault(models),
       games,
     },
     isPast,
@@ -407,8 +414,9 @@ export function marketPrediction(sport: string, g: FootballSpineRow): SlatePredi
 
 async function buildFootballSlate(
   sport: FootballSportConfig, season: number, reqWeek: number | null, division: string | null,
+  control: ControlState,
 ) {
-  const models = modelsForSport(sport.key) as ModelSource[];
+  const models = applyControl(modelsForSport(sport.key) as ModelSource[], control);
   const withTable = models.filter((m) => m.table);
   const spineParams: Record<string, any> = { season, sport: sport.key };
   const spineTypes: Record<string, any> = {};
@@ -457,10 +465,10 @@ async function buildFootballSlate(
       return {
         key: m.key, label: m.label, role: m.role, available: marketN > 0,
         outputs: m.outputs || ['win_prob'], learn: m.learn ?? null, rows: marketN,
-        note: marketN ? (sport.key === 'cfb'
+        note: m.noteOverride ?? (marketN ? (sport.key === 'cfb'
           ? 'Win probability from the consensus spread, Φ(spread/15.5).'
           : 'De-vigged closing moneyline; the spread where no moneyline has landed.')
-          : 'No lines stored for this week yet.',
+          : 'No lines stored for this week yet.'),
       } as ModelEntry;
     }
     return entryFor(m, byKey[m.key] || null, sport.seasonDataset,
@@ -500,7 +508,7 @@ async function buildFootballSlate(
       division,
       weeks,
       models: entries,
-      featured_default: models.find((m) => m.role === 'production')?.key ?? null,
+      featured_default: featuredDefault(models),
       games,
     },
     isPast,
@@ -529,8 +537,9 @@ function badRequest(res: Response, message: string) {
 function send(
   res: Response, format: Format, data: any, meta: Record<string, any>, ttl: number,
   csv: () => { filename: string; body: string },
+  maxAge = Infinity,
 ) {
-  res.set('Cache-Control', `public, max-age=${ttl}`);
+  res.set('Cache-Control', `public, max-age=${Math.min(ttl, maxAge)}`);
   if (format === 'csv') {
     const { filename, body } = csv();
     res.set('Content-Type', 'text/csv; charset=utf-8');
@@ -574,14 +583,17 @@ export async function getSlate(req: Request, res: Response): Promise<void> {
   if (!format) return;
 
   try {
+    // Control plane state (never throws; unavailable -> no overrides). Its version is in
+    // the cache key so a hide/relabel shows up on every instance within the control TTL.
+    const control = await getControl(sport);
     let key: string;
     let build: () => Promise<{ value: any; ttl: number }>;
     if (!football) {
       if (req.query.date && !isDate(req.query.date)) { badRequest(res, 'date must be YYYY-MM-DD'); return; }
       const date = isDate(req.query.date) ? String(req.query.date) : todayEt();
-      key = getCacheKey('pred:slate', { sport, date });
+      key = getCacheKey('pred:slate', { sport, date, cv: control.version });
       build = async () => {
-        const b = await buildMlbSlate(date);
+        const b = await buildMlbSlate(date, control);
         return { value: { data: b.data, meta: b.meta }, ttl: slateTtl(b.isPast) };
       };
     } else {
@@ -599,9 +611,11 @@ export async function getSlate(req: Request, res: Response): Promise<void> {
         division = d === 'all' ? null : d;
       }
       // A defaulted week is keyed as such, so it moves on when the week does (5-minute TTL).
-      key = getCacheKey('pred:slate', { sport, season, week: week ?? 'current', division: division ?? 'all' });
+      key = getCacheKey('pred:slate', {
+        sport, season, week: week ?? 'current', division: division ?? 'all', cv: control.version,
+      });
       build = async () => {
-        const b = await buildFootballSlate(football, season, week, division);
+        const b = await buildFootballSlate(football, season, week, division, control);
         return { value: { data: b.data, meta: b.meta }, ttl: week == null ? slateTtl(false) : slateTtl(b.isPast) };
       };
     }
@@ -620,7 +634,7 @@ export async function getSlate(req: Request, res: Response): Promise<void> {
         date: data.date, season: data.season, week: data.week, division: data.division ?? null,
       }),
       body: toCsv(SLATE_CSV_HEADERS, slateCsvRows(data)),
-    }));
+    }), CONTROL_MAX_AGE);
   } catch (error: any) {
     logger.error('unified slate failed', { sport, error: error.message });
     res.status(500).json({
@@ -701,6 +715,15 @@ export async function getPlayers(req: Request, res: Response): Promise<void> {
   }
 
   try {
+    // Player projections are the PA simulator's (sim_blend): hidden there, hidden here.
+    const playersHidden = isHidden(await getControl('mlb'), 'sim_blend');
+    if (playersHidden) {
+      send(res, format, {
+        sport, available: false, date, game_id: gameId, rows: [], note: 'Not shown right now.',
+      }, { sport, count: 0, hidden: true }, 300,
+      () => ({ filename: filename(), body: toCsv(PLAYER_CSV_HEADERS, []) }), CONTROL_MAX_AGE);
+      return;
+    }
     const key = getCacheKey('pred:players', { sport, date, game: gameId });
     const { value, ttl, hit } = await cached(key, async () => {
       const q = gameId
@@ -746,7 +769,8 @@ export async function getPlayers(req: Request, res: Response): Promise<void> {
     send(res, format, value.data, {
       sport, count: value.data.rows.length, table: `${MLB_DATASET}.${PLAYER_PROJ_TABLE}`,
       cache_ttl: ttl, elapsed_ms: Date.now() - started,
-    }, ttl, () => ({ filename: filename(), body: toCsv(PLAYER_CSV_HEADERS, value.data.rows) }));
+    }, ttl, () => ({ filename: filename(), body: toCsv(PLAYER_CSV_HEADERS, value.data.rows) }),
+    CONTROL_MAX_AGE);
   } catch (error: any) {
     logger.error('unified players failed', { sport, error: error.message });
     res.status(500).json({
