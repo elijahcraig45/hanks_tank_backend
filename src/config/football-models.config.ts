@@ -36,6 +36,8 @@ export interface CompareModelSource {
   sports: string[];
   /** Listed but not queried yet. */
   planned?: boolean;
+  /** Set by the control plane overlay (public_note); wins over any derived note. */
+  noteOverride?: string;
 }
 
 export const COMPARE_MODELS: CompareModelSource[] = [

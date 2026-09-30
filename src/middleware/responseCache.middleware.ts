@@ -37,7 +37,13 @@ export interface CacheOptions {
   /**
    * Prefix for readable keys. Defaults to the route path, which is usually enough.
    */
-  prefix?: string;
+  prefix?: string | ((req: Request) => string);
+  /**
+   * Caps the Cache-Control max-age sent to browsers and edge caches. The server-side TTL
+   * is unchanged. Used where a change (a model hidden from the control plane) must show
+   * up in about a minute, not after the full TTL.
+   */
+  maxAge?: number;
   /**
    * Set on any route whose body can differ by who is asking.
    *
@@ -54,7 +60,7 @@ export interface CacheOptions {
   perViewer?: boolean;
 }
 
-export function cacheGet({ ttl, prefix, perViewer }: CacheOptions) {
+export function cacheGet({ ttl, prefix, perViewer, maxAge }: CacheOptions) {
   return async function cacheGetMiddleware(
     req: Request, res: Response, next: NextFunction,
   ): Promise<void> {
@@ -66,11 +72,18 @@ export function cacheGet({ ttl, prefix, perViewer }: CacheOptions) {
     // is the same either way, so letting the anonymous response be publicly cached is
     // what would poison it for everyone who signs in.
     const scoped = perViewer || Boolean(req.user);
-    const cacheControl = `${scoped ? 'private' : 'public'}, max-age=${ttl}`;
+    const clientAge = maxAge != null ? Math.min(ttl, Math.max(0, maxAge)) : ttl;
+    const cacheControl = `${scoped ? 'private' : 'public'}, max-age=${clientAge}`;
     // res.vary appends; res.set would replace, and CORS has already put Origin there.
     if (perViewer) res.vary('Authorization');
 
-    const key = getCacheKey(prefix || 'route', {
+    // A prefix function is how a route folds per-request state (the model control
+    // version) into its key. It must not throw: a failure means "no suffix".
+    let resolved = typeof prefix === 'function' ? '' : prefix;
+    if (typeof prefix === 'function') {
+      try { resolved = prefix(req); } catch { resolved = ''; }
+    }
+    const key = getCacheKey(resolved || 'route', {
       url: req.originalUrl,
       // Anonymous callers share one bucket; they are identical by definition.
       viewer: req.user?.userId || 'anon',

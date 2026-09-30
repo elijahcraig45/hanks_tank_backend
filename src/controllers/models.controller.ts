@@ -41,6 +41,10 @@ import { spineSql } from './football-compare.controller';
 import {
   ScoredGame, buildModelScoreboard, disagreement, ModelPick, SMALL_SAMPLE,
 } from '../utils/model-scoring';
+import { controlForRequest } from '../middleware/modelControl.middleware';
+import { ControlState } from '../services/model-control.service';
+import { applyControl, hiddenKeys, isHidden, orderByControl } from '../utils/model-overlay';
+import { chooseStandIn, standInCandidates, standInReason } from '../utils/stand-in';
 import { MLB_BACKTEST } from '../data/model-backtests/mlb';
 import { NFL_BACKTEST } from '../data/model-backtests/nfl';
 import { CFB_BACKTEST } from '../data/model-backtests/cfb';
@@ -196,7 +200,7 @@ async function loadModel(
       rows: [],
       status: {
         ...base, available: false, rows: 0,
-        note: m.note || (m.planned ? 'Planned — not built yet.' : null),
+        note: m.noteOverride ?? (m.note || (m.planned ? 'Planned — not built yet.' : null)),
       },
     };
   }
@@ -208,7 +212,7 @@ async function loadModel(
         ...base,
         available: rows.length > 0,
         rows: rows.length,
-        note: rows.length ? null : `No ${m.label} predictions for this season yet.`,
+        note: m.noteOverride ?? (rows.length ? null : `No ${m.label} predictions for this season yet.`),
       },
     };
   } catch (error: any) {
@@ -218,7 +222,7 @@ async function loadModel(
       rows: [],
       status: {
         ...base, available: false, rows: 0,
-        note: 'Not live yet: this shadow model has no pregame predictions recorded so far.',
+        note: m.noteOverride ?? 'Not live yet: this shadow model has no pregame predictions recorded so far.',
       },
     };
   }
@@ -331,8 +335,18 @@ function referenceFor(sport: string, statuses: ModelStatus[]): string | null {
 /** Strip the internal bootstrap block before a game leaves the server. */
 const publicGame = ({ block, ...rest }: ModelGameRow & { block: string }): ModelGameRow => rest;
 
-function backtestFor(sport: string, division: string | null) {
-  const b = BACKTESTS[sport];
+/** The stored backtest, minus any model the control plane hides. */
+function withoutHidden(b: any, hidden: Set<string>): any {
+  if (!hidden.size || !Array.isArray(b?.windows)) return b;
+  return {
+    ...b,
+    windows: b.windows.map((w: any) => (Array.isArray(w?.models)
+      ? { ...w, models: w.models.filter((m: any) => !hidden.has(m?.key)) } : w)),
+  };
+}
+
+function backtestFor(sport: string, division: string | null, control?: ControlState) {
+  const b = control ? withoutHidden(BACKTESTS[sport], hiddenKeys(control)) : BACKTESTS[sport];
   if (!b) return null;
   return {
     ...b,
@@ -347,15 +361,20 @@ function backtestFor(sport: string, division: string | null) {
 
 export async function getModelsCompare(req: Request, res: Response): Promise<void> {
   const sport = String(req.params.sport || '').toLowerCase();
-  const registry = modelsForSport(sport);
+  const baseRegistry = modelsForSport(sport);
   const football: FootballSportConfig | null = sport === 'mlb' ? null : getFootballSport(sport);
-  if (!registry || (sport !== 'mlb' && !football)) {
+  if (!baseRegistry || (sport !== 'mlb' && !football)) {
     res.status(404).json({
       success: false,
       error: { code: 'UNKNOWN_SPORT', message: `Unknown sport: ${sport}` },
     });
     return;
   }
+
+  // Control plane overlay: hidden models are removed, label / note / order overridden.
+  // Unavailable control returns the registry itself, so nothing below changes.
+  const control = await controlForRequest(req, sport);
+  const registry = applyControl(baseRegistry, control);
 
   const season = parseInt((req.query.season as string) || '', 10)
     || parseInt(process.env.CURRENT_SEASON || '', 10)
@@ -388,21 +407,25 @@ export async function getModelsCompare(req: Request, res: Response): Promise<voi
 
     let games: Array<ModelGameRow & { block: string }>;
     if (football) {
-      games = buildFootballGames(sport, spine as SpineRow[], sources, true);
-      const mk = registry.find((m) => m.key === 'market')!;
-      const n = games.filter((g) => g.predictions.market).length;
-      statuses.unshift({
-        key: 'market', label: mk.label, role: 'benchmark', available: n > 0,
-        planned: false, backtest_only: false, rows: n, has_margin: true, has_total: false,
-        note: n ? (sport === 'cfb' ? 'Win probability from the consensus spread, Φ(spread/15.5).'
-          : 'De-vigged closing moneyline; the spread where no moneyline has landed.')
-          : 'No lines stored for this season yet.',
-      });
+      // The market is derived, not loaded; a hidden market has no entry in the overlaid registry.
+      const mk = registry.find((m) => m.key === 'market');
+      games = buildFootballGames(sport, spine as SpineRow[], sources, Boolean(mk));
+      if (mk) {
+        const n = games.filter((g) => g.predictions.market).length;
+        statuses.unshift({
+          key: 'market', label: mk.label, role: 'benchmark', available: n > 0,
+          planned: false, backtest_only: false, rows: n, has_margin: true, has_total: false,
+          note: mk.noteOverride ?? (n ? (sport === 'cfb' ? 'Win probability from the consensus spread, Φ(spread/15.5).'
+            : 'De-vigged closing moneyline; the spread where no moneyline has landed.')
+            : 'No lines stored for this season yet.'),
+        });
+      }
     } else {
       games = buildMlbGames(spine as any[], sources, season);
     }
 
     const scored = statuses.filter((s) => s.available).map((s) => s.key);
+    // A hidden reference has no status, so this falls through to the next candidate.
     const reference = referenceFor(sport, statuses);
     const scoreboard = buildModelScoreboard(games, scored, reference);
 
@@ -432,6 +455,12 @@ export async function getModelsCompare(req: Request, res: Response): Promise<voi
     const postStartOnly = games.filter((g) => Object.values(g.predictions)
       .some((p) => p && !p.pregame)).length;
 
+    // Stand-in (MLB only): only when control hid or paused the production model.
+    const served = new Set(Object.keys(sources).filter((k) => listed.some((g) => g.predictions[k])));
+    const standIn = football ? null : chooseStandIn({
+      sport, control, registry, served, seasonGames: games,
+    });
+
     res.json({
       success: true,
       data: {
@@ -441,11 +470,14 @@ export async function getModelsCompare(req: Request, res: Response): Promise<voi
         rule: RULE,
         reference,
         small_sample_threshold: SMALL_SAMPLE,
-        models: statuses,
+        models: orderByControl(statuses, control),
         scoreboard,
         games: listed.map(publicGame).reverse(),
         window,
-        backtest: backtestFor(sport, division),
+        backtest: backtestFor(sport, division, control),
+        // MLB only in this release: football bodies are unchanged.
+        ...(football ? {} : { stand_in: standIn }),
+        ...(standIn ? { featured_default: standIn.model } : {}),
       },
       meta: {
         sport,
@@ -540,6 +572,18 @@ export async function getMlbTotalsProps(req: Request, res: Response): Promise<vo
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : today;
   const backtest = MLB_BACKTEST.extras || null;
+  // The totals & props come from the PA simulator (sim_blend): hidden there, hidden here.
+  if (isHidden(await controlForRequest(req, 'mlb'), 'sim_blend')) {
+    res.json({
+      success: true,
+      data: {
+        available: false, date, games: [], note: 'Not shown right now.',
+        batter_props: { shown: false, reason: 'Not shown right now.' }, backtest: null,
+      },
+      meta: { count: 0, hidden: true },
+    });
+    return;
+  }
   try {
     const [rows] = await bigquery.query({ query: propsSql(), params: { d: date } });
     res.json({
@@ -576,3 +620,36 @@ export async function getMlbTotalsProps(req: Request, res: Response): Promise<vo
     });
   }
 }
+
+
+/* ── stand-in support for the unified slate ──────────────────────────── */
+
+const SEASON_MEMO_MS = 15 * 60 * 1000;
+const seasonMemo = new Map<string, { at: number; games: Array<ModelGameRow & { block: string }> }>();
+export const resetStandInMemo = (): void => seasonMemo.clear();
+
+/**
+ * The MLB season's games with each of `models`' pregame picks, for the slate's stand-in
+ * choice. Only read when a stand-in applies. Memoised per (season, model set) for the
+ * compare route's cache lifetime so the headline does not flip between page loads.
+ */
+export async function loadMlbSeasonGames(
+  season: number, models: ModelSource[],
+): Promise<Array<ModelGameRow & { block: string }>> {
+  const live = models.filter((m) => m.table && !m.planned && !m.backtestOnly);
+  const memoKey = `${season}:${live.map((m) => m.key).sort().join(',')}`;
+  const hit = seasonMemo.get(memoKey);
+  if (hit && Date.now() - hit.at < SEASON_MEMO_MS) return hit.games;
+  const params = { season };
+  const [[spine], ...loaded] = await Promise.all([
+    bigquery.query({ query: mlbSpineSql(), params }),
+    ...live.map((m) => loadModel('mlb', m, MLB_DATASET, params)),
+  ]);
+  const sources: Record<string, ModelRow[]> = {};
+  live.forEach((m, i) => { if (loaded[i].status.available) sources[m.key] = loaded[i].rows; });
+  const games = buildMlbGames(spine as any[], sources, season);
+  seasonMemo.set(memoKey, { at: Date.now(), games });
+  return games;
+}
+
+export { standInCandidates, standInReason };

@@ -19,6 +19,8 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
 import { FootballSportConfig, datasetFor } from '../config/football.config';
 import { MARKET_KEY, modelsFor, CompareModelSource } from '../config/football-models.config';
+import { controlForRequest } from '../middleware/modelControl.middleware';
+import { applyControl, isHidden, orderByControl, overrideFor } from '../utils/model-overlay';
 import { resolveSport, isMissingTable } from '../utils/football-request';
 import {
   buildComparison, buildScoreboard, defaultWeek, ModelRow, SpineRow,
@@ -138,7 +140,7 @@ async function loadModel(
   if (m.planned) {
     return {
       rows: [],
-      status: { ...base, available: false, rows: 0, note: 'Planned — not built yet.' },
+      status: { ...base, available: false, rows: 0, note: m.noteOverride ?? 'Planned — not built yet.' },
     };
   }
   try {
@@ -149,7 +151,7 @@ async function loadModel(
         ...base,
         available: rows.length > 0,
         rows: rows.length,
-        note: rows.length ? null : `No ${m.label} predictions for this season yet.`,
+        note: m.noteOverride ?? (rows.length ? null : `No ${m.label} predictions for this season yet.`),
       },
     };
   } catch (error: any) {
@@ -161,7 +163,7 @@ async function loadModel(
       rows: [],
       status: {
         ...base, available: false, rows: 0,
-        note: `${sport.seasonDataset}.${m.table} has not been created yet.`,
+        note: m.noteOverride ?? `${sport.seasonDataset}.${m.table} has not been created yet.`,
       },
     };
   }
@@ -189,7 +191,11 @@ export async function getModelComparison(req: Request, res: Response): Promise<v
       spineTypes.division = 'STRING';
     }
 
-    const models = modelsFor(sport.key);
+    // Control plane overlay (identity when control is unavailable). The spine query does
+    // not depend on any one model, so a hidden production model still leaves the games.
+    const control = await controlForRequest(req, sport.key);
+    const models = applyControl(modelsFor(sport.key), control);
+    const marketHidden = isHidden(control, MARKET_KEY);
     const [[spine], ...loaded] = await Promise.all([
       bigquery.query({
         query: spineSql(sport, sport.hasDivisions),
@@ -203,21 +209,25 @@ export async function getModelComparison(req: Request, res: Response): Promise<v
     models.forEach((m, i) => { if (!m.planned) sources[m.key] = loaded[i].rows; });
 
     const games = buildComparison(sport.key, spine as SpineRow[], sources);
-    const scored = [...Object.keys(sources), MARKET_KEY];
+    if (marketHidden) for (const g of games) delete g.predictions[MARKET_KEY];
+    const scored = marketHidden ? Object.keys(sources) : [...Object.keys(sources), MARKET_KEY];
     const weeks = [...new Set(games.map((g) => g.week))].sort((a, b) => a - b);
     const week = Number.isFinite(requestedWeek) ? requestedWeek : defaultWeek(games);
     const weekGames = games.filter((g) => g.week === week);
 
     const statuses: ModelStatus[] = loaded.map((l) => l.status);
-    statuses.push({
-      key: MARKET_KEY,
-      label: 'Betting market',
-      available: games.some((g) => g.predictions[MARKET_KEY]),
-      planned: false,
-      has_margin: true,
-      rows: games.filter((g) => g.predictions[MARKET_KEY]).length,
-      note: null,
-    });
+    if (!marketHidden) {
+      const mc = overrideFor(control, MARKET_KEY);
+      statuses.push({
+        key: MARKET_KEY,
+        label: mc?.label ?? 'Betting market',
+        available: games.some((g) => g.predictions[MARKET_KEY]),
+        planned: false,
+        has_margin: true,
+        rows: games.filter((g) => g.predictions[MARKET_KEY]).length,
+        note: mc?.note ?? null,
+      });
+    }
 
     res.json({
       success: true,
@@ -227,7 +237,7 @@ export async function getModelComparison(req: Request, res: Response): Promise<v
         week,
         division,
         weeks,
-        models: statuses,
+        models: orderByControl(statuses, control),
         games: weekGames,
         scoreboard: buildScoreboard(games, scored),
         week_scoreboard: buildScoreboard(weekGames, scored),
