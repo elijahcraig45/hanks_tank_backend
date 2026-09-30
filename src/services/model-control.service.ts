@@ -9,8 +9,13 @@
  * Fail open, always. A missing dataset, an empty view, a slow or failing query all
  * resolve to `{ available: false, version: 'none', models: {} }`, which every consumer
  * treats as "no overrides": the site behaves exactly as it did before this existed. One
- * WARNING is logged per failed read (the failure result is itself cached briefly so a
- * dead control dataset costs one query and one log line per window, not one per request).
+ * WARNING is logged per failure window (the failure result is itself cached briefly so a
+ * dead control dataset costs one query per 10 s and one log line per window).
+ *
+ * Last known good: after a failed read the last successfully read state keeps applying
+ * for up to 6 hours (same version hash, so cache keys stay stable), then the service
+ * fails open. One warning when the window opens, one when the remembered state expires.
+ * A successful read replaces it immediately.
  *
  * Bounded cost: one small query per sport per 30 s per instance (or one query for all
  * three sports from /api/site-status). Concurrent callers share one in-flight read.
@@ -32,15 +37,22 @@ export const CONTROL_TTL_MS = 30_000;
 /** A failed read is remembered briefly, so recovery is quick but a dead view is not hammered. */
 export const CONTROL_FAILURE_TTL_MS = 10_000;
 export const CONTROL_TIMEOUT_MS = 2_500;
+/** After failed reads, the last successfully read state keeps applying for this long. */
+export const CONTROL_LAST_GOOD_MS = 6 * 60 * 60 * 1000;
 
 export const LIMITS = { label: 60, note: 300, banner: 240, sortMin: -1000, sortMax: 1000 } as const;
 
 export type BannerLevel = 'info' | 'warn' | 'error';
-export type ControlRole = 'live' | 'shadow' | 'archived';
+/** Control lifecycle (informational). Unrelated to the registry's role (production/shadow/...). */
+export type ControlLifecycle = 'live' | 'shadow' | 'archived';
+export type ControlRole = ControlLifecycle;
 
 export interface ModelControlEntry {
   visible: boolean;
   paused: boolean;
+  /** From the view's `lifecycle` column, falling back to `role` during the transition. */
+  lifecycle?: ControlLifecycle;
+  /** Same value as `lifecycle` (kept so existing consumers keep working). */
   role?: ControlRole;
   label?: string;
   note?: string;
@@ -97,8 +109,12 @@ function parseEntry(row: any): ModelControlEntry {
     visible: lower(row.site_visible) !== 'false',
     paused: lower(row.run_state) === 'paused',
   };
-  const role = lower(row.role);
-  if (ROLES.has(role)) e.role = role as ControlRole;
+  // `lifecycle` first, `role` while the view still carries both columns.
+  const lifecycle = [lower(row.lifecycle), lower(row.role)].find((v) => ROLES.has(v));
+  if (lifecycle) {
+    e.lifecycle = lifecycle as ControlLifecycle;
+    e.role = lifecycle as ControlRole;
+  }
   const label = cleanText(row.display_label, LIMITS.label);
   if (label) e.label = label;
   const note = cleanText(row.public_note, LIMITS.note);
@@ -161,9 +177,15 @@ export function parseControlRows(rows: any[], sport: string): ControlState {
 const cache = new Map<string, { at: number; ttl: number; state: ControlState }>();
 const inflight = new Map<string, Promise<Map<string, ControlState>>>();
 
+/** Last successful read per sport, and the failure window (warnings already logged). */
+const lastGood = new Map<string, { at: number; state: ControlState }>();
+const windows = new Map<string, { expiryLogged: boolean }>();
+
 export function resetControlCache(): void {
   cache.clear();
   inflight.clear();
+  lastGood.clear();
+  windows.clear();
 }
 
 const fresh = (sport: string): ControlState | null => {
@@ -204,16 +226,33 @@ function load(sports: string[]): Promise<Map<string, ControlState>> {
         const state = parseControlRows(rows, s);
         out.set(s, state);
         cache.set(s, { at, ttl: CONTROL_TTL_MS, state });
+        // A good read (an empty view included) replaces the remembered state at once.
+        lastGood.set(s, { at, state });
+        windows.delete(s);
       }
     } catch (error: any) {
-      logger.warn('model control unavailable; serving without overrides', {
-        sports, error: error?.message,
-      });
       const at = now();
+      const opened: string[] = [];
+      const expired: string[] = [];
       for (const s of sports) {
-        const state = unavailable();
+        const good = lastGood.get(s);
+        const remembered = good && at - good.at < CONTROL_LAST_GOOD_MS ? good.state : null;
+        if (!windows.has(s)) { windows.set(s, { expiryLogged: false }); opened.push(s); }
+        const w = windows.get(s)!;
+        if (!remembered && good && !w.expiryLogged) { w.expiryLogged = true; expired.push(s); }
+        const state = remembered || unavailable();
         out.set(s, state);
         cache.set(s, { at, ttl: CONTROL_FAILURE_TTL_MS, state });
+      }
+      if (opened.length) {
+        logger.warn('model control unavailable; keeping the last known state (up to 6 h) or serving without overrides', {
+          sports: opened, error: error?.message,
+        });
+      }
+      if (expired.length) {
+        logger.warn('model control: remembered state expired after 6 h; serving without overrides', {
+          sports: expired, error: error?.message,
+        });
       }
     }
     return out;
