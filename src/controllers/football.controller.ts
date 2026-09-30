@@ -11,6 +11,8 @@
 import { Request, Response } from 'express';
 import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
+import { controlForRequest } from '../middleware/modelControl.middleware';
+import { isProductionHidden, maskPredictionRow } from '../utils/model-overlay';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
 import { FootballSportConfig, datasetFor } from '../config/football.config';
 import { getColumnCatalog, resolveColumns } from '../config/football-columns.config';
@@ -55,8 +57,14 @@ export async function getPredictions(req: Request, res: Response): Promise<void>
     `;
 
     const [rows] = await bigquery.query({ query: sql, params });
-    const data = rows.map(normalizeRow);
-    res.json({ success: true, data, meta: { sport: sport.key, count: data.length } });
+    let data = rows.map(normalizeRow);
+    // Control plane: production model hidden -> the games, with prediction fields null.
+    const hidden = isProductionHidden(await controlForRequest(req, sport.key), sport.key);
+    if (hidden) data = data.map(maskPredictionRow);
+    res.json({
+      success: true, data,
+      meta: { sport: sport.key, count: data.length, ...(hidden ? { hidden: true } : {}) },
+    });
   } catch (error: any) {
     logger.error('football predictions query failed', {
       sport: sport.key, error: error.message,
@@ -98,6 +106,14 @@ export async function getAccuracy(req: Request, res: Response): Promise<void> {
   if (!sport) return;
 
   try {
+    if (isProductionHidden(await controlForRequest(req, sport.key), sport.key)) {
+      res.json({
+        success: true,
+        data: null,
+        meta: { sport: sport.key, label: sport.label, hidden: true, note: 'This model is not shown right now.' },
+      });
+      return;
+    }
     const season = parseInt((req.query.season as string) || '2025', 10);
     const division = (req.query.division as string || '').toLowerCase();
 
@@ -653,6 +669,14 @@ export async function getDiagnostics(req: Request, res: Response): Promise<void>
   if (!sport) return;
 
   try {
+    if (isProductionHidden(await controlForRequest(req, sport.key), sport.key)) {
+      res.json({
+        success: true,
+        diagnostics: [],
+        meta: { sport: sport.key, count: 0, hidden: true, note: 'This model is not shown right now.' },
+      });
+      return;
+    }
     const { season, seasons, division, fromWeek, toWeek } = req.query as Record<string, string>;
 
     // home_won is required as well as prediction_correct: Brier and log loss are

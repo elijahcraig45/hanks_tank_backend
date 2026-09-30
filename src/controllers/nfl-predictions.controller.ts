@@ -13,6 +13,8 @@
 import { Request, Response } from 'express';
 import { BigQuery } from '@google-cloud/bigquery';
 import { logger } from '../utils/logger';
+import { getControl } from '../services/model-control.service';
+import { isProductionHidden, maskPredictionRow } from '../utils/model-overlay';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
@@ -65,7 +67,9 @@ export async function getNflPredictions(req: Request, res: Response): Promise<vo
     `;
 
     const [rows] = await bigquery.query({ query: sql, params });
-    const data = rows.map(normalizeRow);
+    let data = rows.map(normalizeRow);
+    // Control plane: production model hidden -> games with prediction fields null.
+    if (isProductionHidden(await getControl('nfl'), 'nfl')) data = data.map(maskPredictionRow);
 
     res.json({
       success: true,
@@ -84,6 +88,10 @@ export async function getNflPredictions(req: Request, res: Response): Promise<vo
 /** GET /api/nfl/predictions/accuracy?season= — model vs baselines, for the results view. */
 export async function getNflAccuracy(req: Request, res: Response): Promise<void> {
   try {
+    if (isProductionHidden(await getControl('nfl'), 'nfl')) {
+      res.json({ success: true, data: null, meta: { hidden: true } });
+      return;
+    }
     const season = parseInt((req.query.season as string) || '2025', 10);
 
     const sql = `
