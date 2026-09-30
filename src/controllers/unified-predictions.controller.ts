@@ -38,7 +38,8 @@ import {
   ModelRow, SpineRow, defaultWeek, marketProbability, pickPrediction, pickLatestPregameRow,
 } from '../utils/football-compare';
 import { spineSql } from './football-compare.controller';
-import { modelSql } from './models.controller';
+import { loadMlbSeasonGames, modelSql } from './models.controller';
+import { chooseStandIn, standInCandidates, standInReason } from '../utils/stand-in';
 import {
   PLAYER_CSV_HEADERS, SLATE_CSV_HEADERS, SimDistRow, SlatePrediction, buildPrediction,
   consensusOf, disagreementLevel, exportFilename, finite, meanDist, normalizePlayerRow,
@@ -324,6 +325,25 @@ async function buildMlbSlate(date: string, control: ControlState) {
     return finishGame({ ...g, predictions }, available);
   });
 
+  // Stand-in: only when control hid or paused the production model. Season log loss comes
+  // from the same loaders the compare page uses (memoised); a failure means no log loss,
+  // so the fixed order decides.
+  let standIn = null as ReturnType<typeof chooseStandIn>;
+  if (standInReason(control, 'mlb')) {
+    const served = new Set(models.map((m) => m.key)
+      .filter((k) => games.some((g) => g.predictions[k])));
+    const candidates = standInCandidates('mlb', models, served);
+    let seasonGames: any[] = [];
+    if (candidates.length > 1) {
+      try {
+        seasonGames = await loadMlbSeasonGames(season, models.filter((m) => candidates.includes(m.key)));
+      } catch (error: any) {
+        logger.warn('unified slate: stand-in scoreboard unavailable', { error: error?.message });
+      }
+    }
+    standIn = chooseStandIn({ sport: 'mlb', control, registry: models, served, seasonGames });
+  }
+
   const isPast = date < todayEt();
   return {
     data: {
@@ -332,7 +352,8 @@ async function buildMlbSlate(date: string, control: ControlState) {
       season,
       week: null,
       models: entries,
-      featured_default: featuredDefault(models),
+      featured_default: standIn ? standIn.model : featuredDefault(models),
+      stand_in: standIn,
       games,
     },
     isPast,

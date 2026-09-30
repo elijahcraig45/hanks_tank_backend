@@ -190,7 +190,7 @@ describe('model-control.service', () => {
     ], 'mlb');
     expect(s.available).toBe(true);
     expect(s.models.logit3).toEqual({
-      visible: false, paused: true, role: 'shadow', label: 'x'.repeat(60), note: 'x'.repeat(300), sortOrder: -5,
+      visible: false, paused: true, role: 'shadow', lifecycle: 'shadow', label: 'x'.repeat(60), note: 'x'.repeat(300), sortOrder: -5,
     });
     expect(s.models.elo).toEqual({ visible: true, paused: false });
     expect(s.models['bad key!']).toBeUndefined();
@@ -539,7 +539,11 @@ describe('unified slate with control', () => {
     expect(d.models.find((m: any) => m.key === 'elo').label).toBe('Elo (raw)');
     expect(Object.keys(d.games[0].predictions)).toEqual(['logit3', 'sim_blend', 'elo', 'market']);
     expect(d.games[0].consensus.models_n).toBe(3);
-    expect(d.featured_default).toBe('logit3');
+    // Production hidden: the stand-in (no graded games here, so the fixed order: sim_blend first).
+    expect(d.featured_default).toBe('sim_blend');
+    expect(d.stand_in).toMatchObject({
+      model: 'sim_blend', reason: 'production_hidden', basis: 'fixed_order', n_games: null,
+    });
     expect(d.games).toHaveLength(1); // spine intact
     expect(headers.get('cache-control')).toBe('public, max-age=60');
   });

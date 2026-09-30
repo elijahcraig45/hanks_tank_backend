@@ -54,11 +54,21 @@ show, label / note / order overrides and a per-sport banner. Contract: `mllab/do
   (`services/model-control.service.ts`). `CONTROL_DATASET` defaults to `control`.
 - Cached 30 s per instance per sport; 2.5 s timeout; one query for all sports from `GET /api/site-status`.
 - Fails open: any error, timeout or empty view means no overrides (`available: false`, `version: 'none'`), with one
-  WARNING per failed read. The backend never writes control data and has no admin endpoint.
+  WARNING per failure window. The backend never writes control data and has no admin endpoint.
 - Hidden models are removed from `/api/models/:sport/compare`, `/api/predictions/:sport/slate`, the legacy
   `/api/football/:sport/models/compare`, and (production key hidden) the legacy prediction endpoints return the games
   with prediction fields null and `hidden: true`.
 - The control `version` is part of those routes' cache keys, and browser/edge `Cache-Control` max-age is capped at 60 s.
+- Last known good: after a failed read the last successfully read state (same `version`) keeps applying for up to 6 h,
+  then it fails open. One WARNING when the failure window opens and one when the remembered state expires; a good read
+  replaces it at once (an empty view counts as a good read).
+- `lifecycle` (live/shadow/archived, informational) is read from the view's `lifecycle` column, falling back to `role`;
+  parsed entries expose both `lifecycle` and `role` (same value). Unrelated to the registry role.
+- Stand-in (MLB compare and slate only): when the production key `v10` is hidden or paused by control, the response gets
+  `stand_in: { model, label, reason, basis, n_games }` and `featured_default` is that model. Candidates are visible,
+  non-derived (not elo/market) models with predictions for the games served; lowest season log loss on shared games when
+  there are at least 50, else `sim_blend` then `logit3`. `stand_in` is `null` otherwise (always present on MLB bodies;
+  football and the legacy prediction endpoints are unchanged).
 - `GET /api/site-status` returns `{ generated_at, control_available, sports: { mlb|nfl|cfb: { banner } } }`, max-age 30.
 
 ## Production footprint

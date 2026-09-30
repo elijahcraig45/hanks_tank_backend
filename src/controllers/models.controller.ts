@@ -44,6 +44,7 @@ import {
 import { controlForRequest } from '../middleware/modelControl.middleware';
 import { ControlState } from '../services/model-control.service';
 import { applyControl, hiddenKeys, isHidden, orderByControl } from '../utils/model-overlay';
+import { chooseStandIn, standInCandidates, standInReason } from '../utils/stand-in';
 import { MLB_BACKTEST } from '../data/model-backtests/mlb';
 import { NFL_BACKTEST } from '../data/model-backtests/nfl';
 import { CFB_BACKTEST } from '../data/model-backtests/cfb';
@@ -454,6 +455,12 @@ export async function getModelsCompare(req: Request, res: Response): Promise<voi
     const postStartOnly = games.filter((g) => Object.values(g.predictions)
       .some((p) => p && !p.pregame)).length;
 
+    // Stand-in (MLB only): only when control hid or paused the production model.
+    const served = new Set(Object.keys(sources).filter((k) => listed.some((g) => g.predictions[k])));
+    const standIn = football ? null : chooseStandIn({
+      sport, control, registry, served, seasonGames: games,
+    });
+
     res.json({
       success: true,
       data: {
@@ -468,6 +475,9 @@ export async function getModelsCompare(req: Request, res: Response): Promise<voi
         games: listed.map(publicGame).reverse(),
         window,
         backtest: backtestFor(sport, division, control),
+        // MLB only in this release: football bodies are unchanged.
+        ...(football ? {} : { stand_in: standIn }),
+        ...(standIn ? { featured_default: standIn.model } : {}),
       },
       meta: {
         sport,
@@ -610,3 +620,36 @@ export async function getMlbTotalsProps(req: Request, res: Response): Promise<vo
     });
   }
 }
+
+
+/* ── stand-in support for the unified slate ──────────────────────────── */
+
+const SEASON_MEMO_MS = 15 * 60 * 1000;
+const seasonMemo = new Map<string, { at: number; games: Array<ModelGameRow & { block: string }> }>();
+export const resetStandInMemo = (): void => seasonMemo.clear();
+
+/**
+ * The MLB season's games with each of `models`' pregame picks, for the slate's stand-in
+ * choice. Only read when a stand-in applies. Memoised per (season, model set) for the
+ * compare route's cache lifetime so the headline does not flip between page loads.
+ */
+export async function loadMlbSeasonGames(
+  season: number, models: ModelSource[],
+): Promise<Array<ModelGameRow & { block: string }>> {
+  const live = models.filter((m) => m.table && !m.planned && !m.backtestOnly);
+  const memoKey = `${season}:${live.map((m) => m.key).sort().join(',')}`;
+  const hit = seasonMemo.get(memoKey);
+  if (hit && Date.now() - hit.at < SEASON_MEMO_MS) return hit.games;
+  const params = { season };
+  const [[spine], ...loaded] = await Promise.all([
+    bigquery.query({ query: mlbSpineSql(), params }),
+    ...live.map((m) => loadModel('mlb', m, MLB_DATASET, params)),
+  ]);
+  const sources: Record<string, ModelRow[]> = {};
+  live.forEach((m, i) => { if (loaded[i].status.available) sources[m.key] = loaded[i].rows; });
+  const games = buildMlbGames(spine as any[], sources, season);
+  seasonMemo.set(memoKey, { at: Date.now(), games });
+  return games;
+}
+
+export { standInCandidates, standInReason };
