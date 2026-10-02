@@ -52,6 +52,8 @@ export interface ModelSource {
   simDistributions?: boolean;
   /** Player projections live in player_sim_projections (MLB PA simulator). */
   hasPlayers?: boolean;
+  /** Set by the control plane overlay (public_note); wins over any derived note. */
+  noteOverride?: string;
 }
 
 export const MLB_DATASET = process.env.MLB_2026_DATASET || 'mlb_2026_season';

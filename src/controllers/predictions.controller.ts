@@ -7,6 +7,8 @@ import { Request, Response } from 'express';
 import { BigQuery } from '@google-cloud/bigquery';
 import { mlbApi } from '../services/mlb-api.service';
 import { logger } from '../utils/logger';
+import { getControl } from '../services/model-control.service';
+import { isProductionHidden, maskPredictionRow } from '../utils/model-overlay';
 
 const bigquery = new BigQuery({ projectId: 'hankstank' });
 
@@ -159,7 +161,12 @@ class PredictionsController {
       `;
 
       const [rows] = await bigquery.query({ query: sql });
-      const predictions = rows.map(normalizePredictionRow);
+      let predictions = rows.map(normalizePredictionRow);
+      // Control plane: the production model is hidden. Serve the games (the spine) but
+      // never its numbers; `hidden: true` tells the client why they are null.
+      if (isProductionHidden(await getControl('mlb'), 'mlb')) {
+        predictions = predictions.map(maskPredictionRow);
+      }
 
       res.json({
         success: true,
@@ -244,7 +251,10 @@ class PredictionsController {
       `;
 
       const [rows] = await bigquery.query({ query: sql });
-      const predictions = rows.map(normalizePredictionRow);
+      let predictions = rows.map(normalizePredictionRow);
+      if (predictions.length && isProductionHidden(await getControl('mlb'), 'mlb')) {
+        predictions = predictions.map(maskPredictionRow);
+      }
 
       if (!predictions.length) {
         res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: `No prediction for game ${gamePk}` } });
@@ -321,6 +331,15 @@ class PredictionsController {
         WHERE rn = 1
         ORDER BY game_date ASC, game_time_utc ASC NULLS LAST
       `;
+
+      // Production model hidden: its scored history is not served either.
+      if (isProductionHidden(await getControl('mlb'), 'mlb')) {
+        res.json({
+          success: true, startDate, endDate, totalPredictions: 0, completedGames: 0,
+          pendingGames: 0, diagnostics: [], hidden: true,
+        });
+        return;
+      }
 
       const [predictionRows] = await bigquery.query({ query: sql });
       const normalizedPredictionRows = predictionRows.map(normalizePredictionRow);
