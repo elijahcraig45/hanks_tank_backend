@@ -137,6 +137,17 @@ describe('cacheGet', () => {
     expect(res.headers.get('cache-control')).toBe('public, max-age=60');
   });
 
+  it('marks a failed response no-store, so a shared cache cannot keep the failure for the TTL', async () => {
+    // The in-process store already refuses these; the header has to agree, or Google's
+    // frontend or a browser holds a 500 for as long as a success would have been held.
+    const boom = await fetch(`${baseUrl}/boom`);
+    expect(boom.status).toBe(500);
+    expect(boom.headers.get('cache-control')).toBe('no-store');
+
+    const soft = await fetch(`${baseUrl}/soft-fail`);
+    expect(soft.headers.get('cache-control')).toBe('no-store');
+  });
+
   describe('what shared caches are allowed to do', () => {
     // App Engine serves through Google's frontend, so these headers are the difference
     // between a fast page and one visitor's picks appearing on another's screen.
