@@ -91,11 +91,14 @@ export function cacheGet({ ttl, prefix, perViewer }: CacheOptions) {
     // Intercept the handler's own res.json so it needs no knowledge of caching.
     const send = res.json.bind(res);
     res.json = (body: any) => {
+      const worthCaching = res.statusCode === 200 && body?.success !== false;
       res.set('X-Cache', 'MISS');
-      res.set('Cache-Control', cacheControl);
+      // The freshness header follows the same test as the in-process store. Sent on a 500
+      // it would let Google's frontend or a browser keep the failure for the whole TTL,
+      // which the store above deliberately refuses to do.
+      res.set('Cache-Control', worthCaching ? cacheControl : 'no-store');
       const out = send(body);
 
-      const worthCaching = res.statusCode === 200 && body?.success !== false;
       if (worthCaching) {
         // After responding, so the caller never waits on the write.
         try {
