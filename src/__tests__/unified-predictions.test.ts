@@ -264,7 +264,9 @@ describe('GET /api/predictions/mlb/slate', () => {
     mlbRoutes();
     const first = await get(`/api/predictions/mlb/slate?date=${DATE}`);
     expect(first.headers.get('x-cache')).toBe('MISS');
-    expect(first.headers.get('cache-control')).toBe('public, max-age=300');
+    // Server TTL is 300 (meta.cache_ttl); browsers/edges are capped at 60 s for the control plane.
+    expect(first.body.meta.cache_ttl).toBe(300);
+    expect(first.headers.get('cache-control')).toBe('public, max-age=60');
     const calls = mockQuery.mock.calls.length;
     const second = await get(`/api/predictions/mlb/slate?date=${DATE}`);
     expect(second.headers.get('x-cache')).toBe('HIT');
@@ -275,7 +277,7 @@ describe('GET /api/predictions/mlb/slate', () => {
 
     const past = await get('/api/predictions/mlb/slate?date=2020-06-15');
     expect(past.body.meta.cache_ttl).toBe(3600);
-    expect(past.headers.get('cache-control')).toBe('public, max-age=3600');
+    expect(past.headers.get('cache-control')).toBe('public, max-age=60');
   });
 
   it('validates input and 404s an unknown sport', async () => {

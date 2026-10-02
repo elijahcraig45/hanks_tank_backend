@@ -31,6 +31,7 @@ import {
 import { getModelComparison } from '../controllers/football-compare.controller';
 
 import { cacheGet } from '../middleware/responseCache.middleware';
+import { loadControl, controlPrefix } from '../middleware/modelControl.middleware';
 
 /**
  * TTLs chosen from how often the pipeline rewrites each table, not from traffic.
@@ -49,15 +50,23 @@ const TTL = {
   compare: 900,
 } as const;
 
+// Routes that can serve a model the control plane may hide: the control version joins the
+// key and browser/edge max-age is capped at 60 s (server TTL unchanged).
+const CONTROL_MAX_AGE = 60;
+const controlled = (ttl: number, prefix: string) => [
+  loadControl(),
+  cacheGet({ ttl, prefix: controlPrefix(prefix), maxAge: CONTROL_MAX_AGE }),
+];
+
 const router = Router({ mergeParams: true });
 
 // accuracy must be declared before the bare /predictions route so it is not shadowed
-router.get('/:sport/predictions/accuracy', cacheGet({ ttl: TTL.accuracy, prefix: 'ftbl:acc' }), getAccuracy);
-router.get('/:sport/predictions/diagnostics', cacheGet({ ttl: TTL.diagnostics, prefix: 'ftbl:diag' }), getDiagnostics);
-router.get('/:sport/predictions', cacheGet({ ttl: TTL.predictions, prefix: 'ftbl:preds' }), getPredictions);
+router.get('/:sport/predictions/accuracy', ...controlled(TTL.accuracy, 'ftbl:acc'), getAccuracy);
+router.get('/:sport/predictions/diagnostics', ...controlled(TTL.diagnostics, 'ftbl:diag'), getDiagnostics);
+router.get('/:sport/predictions', ...controlled(TTL.predictions, 'ftbl:preds'), getPredictions);
 // Side-by-side model comparison (experiment): every model's pregame prediction per
 // game plus a season scoreboard. Same TTL as predictions, which move in-week.
-router.get('/:sport/models/compare', cacheGet({ ttl: TTL.compare, prefix: 'ftbl:cmp' }), getModelComparison);
+router.get('/:sport/models/compare', ...controlled(TTL.compare, 'ftbl:cmp'), getModelComparison);
 router.get('/:sport/rankings', cacheGet({ ttl: TTL.teamStats, prefix: 'ftbl:rank' }), getRankings);
 // season totals before the bare /stats/teams so the more specific path wins
 router.get('/:sport/stats/teams/season', searchTeamSeasonStats);
