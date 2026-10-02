@@ -6,8 +6,17 @@
 import { Router } from 'express';
 import { legacyController } from '../controllers/legacy.controller';
 import { getSchedulerHealth } from '../controllers/pipeline-health.controller';
+import { cacheGet } from '../middleware/responseCache.middleware';
+import { config } from '../config/app';
 
 const router = Router();
+
+// Player and leaderboard reads are the same for everyone and change at most daily, but had no
+// Cache-Control, so every repeat visit, crawler render and link preview reached an App Engine
+// instance and kept it billed. Live game surfaces (/games, /games/:gamePk) are left uncached on
+// purpose. The in-process store is per instance; the header is what Google's frontend shares.
+const playerCache = cacheGet({ ttl: config.cache.ttl.players, prefix: 'legacy:player' });
+const statsCache = cacheGet({ ttl: config.cache.ttl.stats, prefix: 'legacy:stats' });
 
 // Team Statistics Endpoints
 router.get('/teamBatting', legacyController.getTeamBatting.bind(legacyController));
@@ -23,12 +32,12 @@ router.get('/TeamBatting/avaliableStats', legacyController.getAvailableStats.bin
 router.get('/TeamPitching/avaliableStats', legacyController.getAvailableStats.bind(legacyController));
 
 // Player Statistics Endpoints
-router.get('/PlayerBatting', legacyController.getPlayerBatting.bind(legacyController));
-router.get('/PlayerPitching', legacyController.getPlayerPitching.bind(legacyController));
+router.get('/PlayerBatting', statsCache, legacyController.getPlayerBatting.bind(legacyController));
+router.get('/PlayerPitching', statsCache, legacyController.getPlayerPitching.bind(legacyController));
 
 // New Player Leaderboard Endpoints (Phase 1)
-router.get('/player-batting', legacyController.getPlayerBatting.bind(legacyController));
-router.get('/player-pitching', legacyController.getPlayerPitching.bind(legacyController));
+router.get('/player-batting', statsCache, legacyController.getPlayerBatting.bind(legacyController));
+router.get('/player-pitching', statsCache, legacyController.getPlayerPitching.bind(legacyController));
 
 // Player Statistics Available Stats
 router.get('/PlayerBatting/avaliableStats', legacyController.getAvailableStats.bind(legacyController));
@@ -43,10 +52,10 @@ router.get('/games/:gamePk', legacyController.getGameDetails.bind(legacyControll
 
 // FanGraphs Integration
 router.get('/playerData', legacyController.getPlayerData.bind(legacyController));
-router.get('/statcast', legacyController.getStatcast.bind(legacyController));
-router.get('/splits', legacyController.getSplits.bind(legacyController));
-router.get('/players/:playerId/profile', legacyController.getPlayerProfile.bind(legacyController));
-router.get('/players/:playerId/game-log', legacyController.getPlayerGameLog.bind(legacyController));
+router.get('/statcast', statsCache, legacyController.getStatcast.bind(legacyController));
+router.get('/splits', statsCache, legacyController.getSplits.bind(legacyController));
+router.get('/players/:playerId/profile', playerCache, legacyController.getPlayerProfile.bind(legacyController));
+router.get('/players/:playerId/game-log', playerCache, legacyController.getPlayerGameLog.bind(legacyController));
 
 // Team Data (aggregated)
 router.get('/teamData', legacyController.getTeamData.bind(legacyController));
