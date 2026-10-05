@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
 import { isMissingTable } from '../utils/football-request';
 import { getRankingSport, RankingSportConfig } from '../config/rankings.config';
 import { normalizeBigQueryTemporalValue } from '../utils/bq-normalize';
+import { getControl } from '../services/model-control.service';
 import { comparePair } from '../utils/rankings-compare';
 
 const PROJECT = process.env.GCP_PROJECT_ID || 'hankstank';
@@ -56,6 +57,28 @@ export function normalizeRankingRow(row: Record<string, any>): Record<string, an
     }
   }
   return out;
+}
+
+/**
+ * Which ranking columns the control plane asks the board to draw. Keys outside the
+ * sport's catalog are dropped (order kept); a list that ends up empty only because
+ * nothing in it was recognised is "no override", never "hide everything". An explicit
+ * "none" (an empty list from the control plane) is the one way to show no columns.
+ */
+export function displayFor(
+  sport: RankingSportConfig,
+  rankings: { show?: string[]; media?: string[] } | undefined,
+): { show: string[] | null; media: string[] | null } {
+  const pick = (asked: string[] | undefined, catalog: string[]): string[] | null => {
+    if (!asked) return null;
+    if (!asked.length) return [];
+    const kept = asked.filter((k) => catalog.includes(k));
+    return kept.length ? kept : null;
+  };
+  return {
+    show: pick(rankings?.show, sport.customRankers.map((c) => c.key)),
+    media: pick(rankings?.media, sport.mediaPolls.map((m) => m.key)),
+  };
 }
 
 function seasonOf(req: Request): number {
@@ -131,6 +154,8 @@ export async function getRankings(req: Request, res: Response): Promise<void> {
     const rows = (raw as Record<string, any>[]).map(normalizeRankingRow);
     const first: any = rows[0] || {};
     const model: string = first.model || 'bt';
+    // Fail open: getControl never throws and returns "unavailable" on any trouble.
+    const control = await getControl(sport.key);
 
     res.json({
       success: true,
@@ -156,6 +181,13 @@ export async function getRankings(req: Request, res: Response): Promise<void> {
         divisions: sport.divisions,
         method: METHODS[model] || METHODS.bt,
         note: sport.note ?? null,
+        // What the control plane wants drawn (null = no override: draw every column that
+        // has data). The rows themselves are never filtered here.
+        display: displayFor(sport, control.rankings),
+        catalog: {
+          custom: sport.customRankers,
+          media: sport.mediaPolls.map((m) => m.key),
+        },
       },
     });
   } catch (error: any) {
