@@ -42,17 +42,7 @@ cron:
     min_backoff_seconds: 5
     max_doublings: 3
 
-# Pre-game lineup scheduler — runs every morning during MLB season (Mar–Nov).
-# Fetches today's game schedule and enqueues one Cloud Task per game,
-# each scheduled to fire 90 minutes before that game's first pitch.
-# The Cloud Task triggers: lineup fetch → matchup features → prediction.
-# Cost impact: ~15 API calls/day + Cloud Tasks queue usage (minimal).
-- description: "Schedule pre-game lineup and prediction tasks for today's games"
-  url: /api/lineup/schedule-today
-  schedule: 0 10 * * *  # 10:00 AM ET daily (most lineups posted by noon ET)
-  timezone: America/New_York
-  target: default
-  retry_parameters:
-    min_backoff_seconds: 30
-    max_doublings: 3
-
+# Per-game lineup/prediction scheduling used to live here (POST /api/lineup/schedule-today at 10:00 ET, one Cloud Task per game).
+# Removed 2026-10-05: per-game scheduling now runs on the homelab (mllab: `pregame` plans every 30 minutes and runs each checkpoint itself), and the Cloud Scheduler job
+# mlb-2026-pregame-schedule is paused. To go back to Cloud Functions: pause `pregame` on the homelab, resume that Scheduler job and the Cloud Tasks queues lineup-pregame and
+# sim-blend, and restore this entry from git history (the route /api/lineup/schedule-today still exists and can be called by hand).
