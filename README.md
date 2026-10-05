@@ -59,6 +59,11 @@ show, label / note / order overrides and a per-sport banner. Contract: `mllab/do
   `/api/football/:sport/models/compare`, and (production key hidden) the legacy prediction endpoints return the games
   with prediction fields null and `hidden: true`.
 - The control `version` is part of those routes' cache keys, and browser/edge `Cache-Control` max-age is capped at 60 s.
+- Ranking columns: the sport-wide row (target `*`) may carry `rankings_show` (up to 3 custom orderings, in order, e.g.
+  `season,results`; `none` = none) and `rankings_media` (poll columns, e.g. `ap,coaches`; `none` = none). Unset = no
+  override. `GET /api/rankings/:sport` returns them as `meta.display` (`{show, media}`, filtered to the sport's catalog in
+  `config/rankings.config.ts`; `null` = no override) with `meta.catalog`; rows are not filtered, the frontend draws the columns.
+  That route has no server cache or `Cache-Control`, so there is nothing to key on the control version.
 - Last known good: after a failed read the last successfully read state (same `version`) keeps applying for up to 6 h,
   then it fails open. One WARNING when the failure window opens and one when the remembered state expires; a good read
   replaces it at once (an empty view counts as a good read).
