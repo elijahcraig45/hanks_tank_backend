@@ -59,11 +59,24 @@ export interface ModelControlEntry {
   sortOrder?: number;
 }
 
+/**
+ * Which ranking columns the power-rankings board shows (sport-wide row, target '*').
+ * `show` = the custom rankers, in order (at most MAX_CUSTOM_RANKINGS); `media` = the poll
+ * columns. An empty array means "explicitly none"; an absent field means no override.
+ */
+export interface RankingsDisplay {
+  show?: string[];
+  media?: string[];
+}
+
+export const MAX_CUSTOM_RANKINGS = 3;
+
 export interface ControlState {
   available: boolean;
   version: string;
   models: Record<string, ModelControlEntry>;
   banner?: { text: string; level: BannerLevel };
+  rankings?: RankingsDisplay;
 }
 
 export const unavailable = (): ControlState => ({ available: false, version: 'none', models: {} });
@@ -131,6 +144,30 @@ function parseBanner(row: any): { text: string; level: BannerLevel } | undefined
   return { text, level: LEVELS.has(level) ? (level as BannerLevel) : 'info' };
 }
 
+/**
+ * "season,results" -> ['season','results']; "none" -> []; anything unusable -> undefined
+ * (no override). Lower-cased, deduped, order kept, capped at `max`.
+ */
+export function parseKeyList(v: unknown, max: number): string[] | undefined {
+  if (v == null) return undefined;
+  const text = String(v).trim().toLowerCase();
+  if (!text) return undefined;
+  if (text === 'none') return [];
+  const keys: string[] = [];
+  for (const part of text.split(',')) {
+    const k = part.trim();
+    if (KEY_RE.test(k) && !keys.includes(k)) keys.push(k);
+  }
+  return keys.length ? keys.slice(0, max) : undefined;
+}
+
+function parseRankings(row: any): RankingsDisplay | undefined {
+  const show = parseKeyList(row.rankings_show, MAX_CUSTOM_RANKINGS);
+  const media = parseKeyList(row.rankings_media, 10);
+  if (show === undefined && media === undefined) return undefined;
+  return { ...(show !== undefined ? { show } : {}), ...(media !== undefined ? { media } : {}) };
+}
+
 const stable = (v: any): any => {
   if (Array.isArray(v)) return v.map(stable);
   if (v && typeof v === 'object') {
@@ -140,9 +177,12 @@ const stable = (v: any): any => {
 };
 
 /** Short stable hash of the parsed state; key order and row order do not matter. */
-export function versionOf(state: Pick<ControlState, 'models' | 'banner'>): string {
+export function versionOf(state: Pick<ControlState, 'models' | 'banner'> & { rankings?: RankingsDisplay }): string {
+  // `rankings` joins the hash only when set, so a state without it keeps the version it
+  // had before this field existed (cache keys do not churn on deploy).
   return createHash('sha1').update(JSON.stringify(stable({
     models: state.models, banner: state.banner || null,
+    ...(state.rankings ? { rankings: state.rankings } : {}),
   }))).digest('hex').slice(0, 10);
 }
 
@@ -158,16 +198,21 @@ export function parseControlRows(rows: any[], sport: string): ControlState {
   const ordered = [...relevant.filter(isGlobal), ...relevant.filter((r) => !isGlobal(r))];
   const models: Record<string, ModelControlEntry> = {};
   let banner: ControlState['banner'];
+  let rankings: RankingsDisplay | undefined;
   for (const r of ordered) {
     const target = String(r.target ?? '').trim();
     if (target === '*') {
       const b = parseBanner(r);
       if (b) banner = b;
+      const rk = parseRankings(r);
+      if (rk) rankings = rk;
     } else if (KEY_RE.test(target)) {
       models[target.toLowerCase()] = parseEntry(r);
     }
   }
-  const state: ControlState = { available: true, version: '', models, ...(banner ? { banner } : {}) };
+  const state: ControlState = {
+    available: true, version: '', models, ...(banner ? { banner } : {}), ...(rankings ? { rankings } : {}),
+  };
   state.version = versionOf(state);
   return state;
 }
