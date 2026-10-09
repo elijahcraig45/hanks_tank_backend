@@ -29,6 +29,7 @@ import {
 } from '../controllers/football-games.controller';
 
 import { getModelComparison } from '../controllers/football-compare.controller';
+import { getCfbScouting } from '../controllers/cfb-scouting.controller';
 
 import { cacheGet } from '../middleware/responseCache.middleware';
 import { loadControl, controlPrefix } from '../middleware/modelControl.middleware';
@@ -48,6 +49,7 @@ const TTL = {
   games: 3600,
   teams: 86400,
   compare: 900,
+  scouting: 900,
 } as const;
 
 // Routes that can serve a model the control plane may hide: the control version joins the
@@ -67,6 +69,8 @@ router.get('/:sport/predictions', ...controlled(TTL.predictions, 'ftbl:preds'), 
 // Side-by-side model comparison (experiment): every model's pregame prediction per
 // game plus a season scoreboard. Same TTL as predictions, which move in-week.
 router.get('/:sport/models/compare', ...controlled(TTL.compare, 'ftbl:cmp'), getModelComparison);
+// College only: a per-game report (picks, ranks, key players, injuries) for one week.
+router.get('/:sport/scouting', ...controlled(TTL.scouting, 'ftbl:scout'), getCfbScouting);
 router.get('/:sport/rankings', cacheGet({ ttl: TTL.teamStats, prefix: 'ftbl:rank' }), getRankings);
 // season totals before the bare /stats/teams so the more specific path wins
 router.get('/:sport/stats/teams/season', searchTeamSeasonStats);
