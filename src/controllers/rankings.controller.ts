@@ -34,6 +34,7 @@ const JSON_COLUMNS: Record<string, string> = {
   why_json: 'why',
   games_json: 'games',
   vs_next_json: 'vs_next',
+  resume_games_json: 'resume_games',
 };
 
 function parseJson(value: unknown): unknown {
@@ -67,8 +68,8 @@ export function normalizeRankingRow(row: Record<string, any>): Record<string, an
  */
 export function displayFor(
   sport: RankingSportConfig,
-  rankings: { show?: string[]; media?: string[] } | undefined,
-): { show: string[] | null; media: string[] | null } {
+  rankings: { show?: string[]; media?: string[]; primary?: string } | undefined,
+): { show: string[] | null; media: string[] | null; primary: string } {
   const pick = (asked: string[] | undefined, catalog: string[]): string[] | null => {
     if (!asked) return null;
     if (!asked.length) return [];
@@ -78,6 +79,10 @@ export function displayFor(
   return {
     show: pick(rankings?.show, sport.customRankers.map((c) => c.key)),
     media: pick(rankings?.media, sport.mediaPolls.map((m) => m.key)),
+    // The order the table is numbered by. An unknown or unsupported ask falls back to the sport's default.
+    primary: rankings?.primary && sport.primaryChoices.includes(rankings.primary)
+      ? rankings.primary
+      : sport.primaryDefault,
   };
 }
 

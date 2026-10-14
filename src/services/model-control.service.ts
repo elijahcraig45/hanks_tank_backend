@@ -67,7 +67,11 @@ export interface ModelControlEntry {
 export interface RankingsDisplay {
   show?: string[];
   media?: string[];
+  /** Which order the table is sorted and numbered by: 'resume' or 'rating'. Absent = the sport's default. */
+  primary?: string;
 }
+
+const PRIMARY_RE = /^(resume|rating)$/;
 
 export const MAX_CUSTOM_RANKINGS = 3;
 
@@ -164,8 +168,14 @@ export function parseKeyList(v: unknown, max: number): string[] | undefined {
 function parseRankings(row: any): RankingsDisplay | undefined {
   const show = parseKeyList(row.rankings_show, MAX_CUSTOM_RANKINGS);
   const media = parseKeyList(row.rankings_media, 10);
-  if (show === undefined && media === undefined) return undefined;
-  return { ...(show !== undefined ? { show } : {}), ...(media !== undefined ? { media } : {}) };
+  const asked = row.rankings_primary == null ? '' : String(row.rankings_primary).trim().toLowerCase();
+  const primary = PRIMARY_RE.test(asked) ? asked : undefined;
+  if (show === undefined && media === undefined && primary === undefined) return undefined;
+  return {
+    ...(show !== undefined ? { show } : {}),
+    ...(media !== undefined ? { media } : {}),
+    ...(primary !== undefined ? { primary } : {}),
+  };
 }
 
 const stable = (v: any): any => {
