@@ -25,6 +25,13 @@ export interface RankingSportConfig {
   customRankers: CustomRanker[];
   /** Media polls, each one or more board columns (`rankings_media`). */
   mediaPolls: MediaPoll[];
+  /**
+   * Which order the table is sorted and numbered by: the season resume ('resume') or the
+   * next-week rating ('rating'). `primaryChoices` is empty for a sport without a resume
+   * board; `primaryDefault` is what the site draws when the control plane says nothing.
+   */
+  primaryChoices: string[];
+  primaryDefault: 'resume' | 'rating';
 }
 
 export interface CustomRanker {
@@ -48,6 +55,8 @@ export const RANKING_SPORTS: Record<string, RankingSportConfig> = {
     divisions: [],
     customRankers: [],
     mediaPolls: [],
+    primaryChoices: [],
+    primaryDefault: 'rating',
   },
   cfb: {
     key: 'cfb',
@@ -66,6 +75,8 @@ export const RANKING_SPORTS: Record<string, RankingSportConfig> = {
       { key: 'ap', columns: ['ap_rank'] },
       { key: 'coaches', columns: ['coaches_rank', 'fcs_coaches_rank'] },
     ],
+    primaryChoices: ['resume', 'rating'],
+    primaryDefault: 'resume',
     note: 'FBS and FCS are fitted together so the two ladders stay comparable; '
       + 'ranks are numbered within a board and overall_rank spans both.',
   },
@@ -78,6 +89,8 @@ export const RANKING_SPORTS: Record<string, RankingSportConfig> = {
     divisions: [],
     customRankers: [],
     mediaPolls: [],
+    primaryChoices: [],
+    primaryDefault: 'rating',
     // Stated because the number invites more confidence than it deserves: measured
     // walk-forward over 2023-2025, team strength moves baseball log loss from 0.6931
     // (a coin flip) only to 0.6808. The ordering is a fair summary of who has played
