@@ -433,7 +433,7 @@ export function marketPrediction(sport: string, g: FootballSpineRow): SlatePredi
   };
 }
 
-async function buildFootballSlate(
+export async function buildFootballSlate(
   sport: FootballSportConfig, season: number, reqWeek: number | null, division: string | null,
   control: ControlState,
 ) {
