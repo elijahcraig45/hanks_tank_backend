@@ -146,7 +146,7 @@ describe('GET /api/models/:sport/compare (football)', () => {
       }]]],
       [/game_predictions_ridge_shadow/, () => { throw new Error('Not found: Table x.ridge'); }],
       [/fpi_game_predictions/, () => { throw new Error('Not found: Table x.fpi'); }],
-      [/game_predictions`/, [[{
+      [/game_predictions_xgb_shadow`/, [[{
         game_id: '2026_03_BUF_MIA', home_win_probability: 0.45,
         predicted_at: { value: '2026-09-16T10:00:00Z' }, model_version: 'nfl_v1',
       }]]],
