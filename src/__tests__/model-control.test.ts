@@ -151,9 +151,12 @@ function nflRoutes() {
       game_id: '2026_03_BUF_MIA', home_win_probability: 0.40, predicted_home_margin: -2.5,
       predicted_at: at('2026-09-18T10:00:00Z'), model_version: 'drive_sim_v1',
     }]]],
-    [/game_predictions_ridge_shadow/, missing('ridge')],
+    [/game_predictions_ridge_shadow/, [[{
+      game_id: '2026_03_BUF_MIA', home_win_probability: 0.42, predicted_home_margin: -1.5,
+      predicted_at: at('2026-09-16T10:00:00Z'), model_version: 'nfl_v2_margin_ridge',
+    }]]],
     [/fpi_game_predictions/, missing('fpi')],
-    [/game_predictions`/, [[{
+    [/game_predictions_xgb_shadow`/, [[{
       game_id: '2026_03_BUF_MIA', home_win_probability: 0.45, predicted_home_margin: null,
       predicted_at: at('2026-09-16T10:00:00Z'), model_version: 'nfl_v1',
     }]]],
@@ -416,17 +419,17 @@ describe('models compare with control', () => {
     expect(status).toBe(200);
     expect(keysOf(body)).not.toContain('market');
     expect(body.data.games[0].predictions.market).toBeUndefined();
-    expect(body.data.reference).toBe('xgb');
-    expect(body.data.scoreboard.head_to_head.models).toEqual(['xgb', 'drive_sim']);
+    expect(body.data.reference).toBe('ridge');
+    expect(body.data.scoreboard.head_to_head.models).toEqual(['ridge', 'xgb', 'drive_sim']);
   });
 
   it('football: a hidden production key still serves the spine games', async () => {
     nflRoutes();
-    setControl([crow('nfl', 'xgb', { site_visible: 'false' })]);
+    setControl([crow('nfl', 'ridge', { site_visible: 'false' })]);
     const { body } = await get('/api/models/nfl/compare?season=2026');
-    expect(keysOf(body)).not.toContain('xgb');
+    expect(keysOf(body)).not.toContain('ridge');
     expect(body.data.games).toHaveLength(1);
-    expect(body.data.games[0].predictions.xgb).toBeUndefined();
+    expect(body.data.games[0].predictions.ridge).toBeUndefined();
     expect(body.data.games[0].predictions.market).toBeTruthy();
     expect(body.data.reference).toBe('market');
   });
@@ -488,8 +491,8 @@ describe('legacy /api/football/:sport/models/compare with control', () => {
     await cacheService.flush();
     setControl([crow('nfl', 'drive_sim', { site_visible: 'false' }), crow('nfl', 'market', { site_visible: 'false' })]);
     const hid = await get('/api/football/nfl/models/compare?season=2026');
-    expect(base.body.data.models.map((m: any) => m.key)).toEqual(['xgb', 'ridge', 'fpi', 'drive_sim', 'market']);
-    expect(hid.body.data.models.map((m: any) => m.key)).toEqual(['xgb', 'ridge', 'fpi']);
+    expect(base.body.data.models.map((m: any) => m.key)).toEqual(['ridge', 'xgb', 'fpi', 'drive_sim', 'market']);
+    expect(hid.body.data.models.map((m: any) => m.key)).toEqual(['ridge', 'xgb', 'fpi']);
     expect(Object.keys(hid.body.data.games[0].predictions).sort()).toEqual(['fpi', 'ridge', 'xgb']);
     expect(JSON.stringify(hid.body.data.scoreboard)).not.toMatch(/drive_sim|market/);
     expect(JSON.stringify(hid.body.data.week_scoreboard)).not.toMatch(/drive_sim|market/);
@@ -499,11 +502,11 @@ describe('legacy /api/football/:sport/models/compare with control', () => {
     nflRoutes();
     setControl([
       crow('nfl', 'fpi', { display_label: 'ESPN', public_note: 'External.', sort_order: '-1' }),
-      crow('nfl', 'xgb', { site_visible: 'false' }),
+      crow('nfl', 'ridge', { site_visible: 'false' }),
     ]);
     const { body } = await get('/api/football/nfl/models/compare?season=2026');
     expect(body.data.models[0]).toEqual(expect.objectContaining({ key: 'fpi', label: 'ESPN', note: 'External.' }));
-    expect(body.data.models.map((m: any) => m.key)).not.toContain('xgb');
+    expect(body.data.models.map((m: any) => m.key)).not.toContain('ridge');
     expect(body.data.games).toHaveLength(1);
   });
 });
@@ -576,12 +579,12 @@ describe('unified slate with control', () => {
 
   it('football slate: hidden production key leaves the games; featured_default moves on', async () => {
     nflRoutes();
-    setControl([crow('nfl', 'xgb', { site_visible: 'false' })]);
+    setControl([crow('nfl', 'ridge', { site_visible: 'false' })]);
     const { body } = await get('/api/predictions/nfl/slate?season=2026&week=3');
-    expect(body.data.models.map((m: any) => m.key)).not.toContain('xgb');
+    expect(body.data.models.map((m: any) => m.key)).not.toContain('ridge');
     expect(body.data.games).toHaveLength(1);
-    expect(Object.keys(body.data.games[0].predictions)).not.toContain('xgb');
-    expect(body.data.featured_default).not.toBe('xgb');
+    expect(Object.keys(body.data.games[0].predictions)).not.toContain('ridge');
+    expect(body.data.featured_default).not.toBe('ridge');
     expect(body.data.featured_default).toBeTruthy();
   });
 
@@ -602,9 +605,9 @@ describe('legacy prediction endpoints with the production model hidden', () => {
     withControl([[/FROM `[^`]*\.game_predictions`/, [[{
       game_id: 'g1', home_team_name: 'MIA', away_team_name: 'BUF', week: 3, season: 2026,
       home_win_probability: 0.6, predicted_winner: 'MIA', confidence_tier: 'high',
-      model_version: 'nfl_v1', elo_home_win_prob: 0.55,
+      model_version: 'nfl_v2_margin_ridge', elo_home_win_prob: 0.55,
     }]]]]);
-    setControl([crow('nfl', 'xgb', { site_visible: 'false' })]);
+    setControl([crow('nfl', 'ridge', { site_visible: 'false' })]);
     const { body } = await get('/api/football/nfl/predictions?season=2026');
     expect(body.data).toHaveLength(1);
     expect(body.data[0]).toEqual(expect.objectContaining({
@@ -625,7 +628,7 @@ describe('legacy prediction endpoints with the production model hidden', () => {
 
   it('football accuracy and diagnostics return the hidden state without querying predictions', async () => {
     withControl([]);
-    setControl([crow('nfl', 'xgb', { site_visible: 'false' })]);
+    setControl([crow('nfl', 'ridge', { site_visible: 'false' })]);
     const acc = await get('/api/football/nfl/predictions/accuracy?season=2025');
     expect(acc.body).toEqual(expect.objectContaining({ success: true, data: null }));
     expect(acc.body.meta.hidden).toBe(true);
