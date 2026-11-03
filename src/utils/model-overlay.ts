@@ -18,7 +18,7 @@
 import type { ControlState } from '../services/model-control.service';
 
 /** The production key: the spine of the slate / compare pages. */
-export const PRODUCTION_KEY: Record<string, string> = { mlb: 'v10', nfl: 'xgb', cfb: 'xgb' };
+export const PRODUCTION_KEY: Record<string, string> = { mlb: 'v10', nfl: 'ridge', cfb: 'ridge' };
 
 export interface Keyed { key: string; label?: string; labelOverride?: string; note?: string; noteOverride?: string }
 

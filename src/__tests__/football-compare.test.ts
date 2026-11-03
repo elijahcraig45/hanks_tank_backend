@@ -224,7 +224,7 @@ describe('GET /:sport/models/compare', () => {
   it('returns the envelope, flattens BigQuery timestamps, and notes missing tables', async () => {
     routeQueries([
       [/WITH p AS/, [[spineRow]]],
-      [/FROM `[^`]*\.game_predictions`/, [[{
+      [/FROM `[^`]*\.game_predictions_xgb_shadow`/, [[{
         game_id: '401858467', home_win_probability: 0.1, predicted_home_margin: null,
         predicted_at: { value: '2026-09-22T10:00:00.000Z' }, model_version: 'cfb_v1',
       }]]],

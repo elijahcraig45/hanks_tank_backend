@@ -119,14 +119,17 @@ export const FOOTBALL_MODELS: Record<string, ModelSource[]> = {
       key: 'market', label: 'Betting market', role: 'benchmark',
       outputs: ['win_prob', 'margin', 'total'], learn: null,
     },
+    // The ridge has been the headline since 2026 week 9: game_predictions holds its rows from then on. Its own table keeps its whole live record
+    // (since week 3), so the comparison reads that. The XGBoost, the headline through week 8, has its own table too, seeded with every row it wrote.
     {
-      key: 'ridge', label: 'Margin ridge', role: 'shadow',
+      key: 'ridge', label: 'Margin ridge (production)', role: 'production',
       table: 'game_predictions_ridge_shadow', marginExpr: 'predicted_home_margin',
       outputs: ['win_prob', 'margin'], learn: '/learn/football-model-compare.html',
     },
     {
-      key: 'xgb', label: 'XGBoost (production)', role: 'production', table: 'game_predictions',
+      key: 'xgb', label: 'XGBoost (former production)', role: 'shadow', table: 'game_predictions_xgb_shadow',
       outputs: ['win_prob'], learn: '/learn/football-models.html',
+      note: 'The headline through 2026 week 8; still predicts every week as a shadow.',
     },
     {
       key: 'fpi', label: 'ESPN FPI', role: 'reference',
@@ -155,15 +158,17 @@ export const FOOTBALL_MODELS: Record<string, ModelSource[]> = {
       table: 'fpi_game_predictions', marginExpr: 'predicted_home_margin',
       outputs: ['win_prob', 'margin'], learn: '/learn/football-model-compare.html',
     },
+    // The ridge is the headline from 2026 week 11 (see the NFL note above for the tables).
     {
-      key: 'ridge', label: 'Margin ridge', role: 'shadow',
+      key: 'ridge', label: 'Margin ridge (production)', role: 'production',
       table: 'game_predictions_ridge_shadow', marginExpr: 'predicted_home_margin',
       outputs: ['win_prob', 'margin'], learn: '/learn/football-model-compare.html',
     },
     {
-      key: 'xgb', label: 'XGBoost (legacy production)', role: 'production',
-      table: 'game_predictions',
+      key: 'xgb', label: 'XGBoost (former production)', role: 'shadow',
+      table: 'game_predictions_xgb_shadow',
       outputs: ['win_prob'], learn: '/learn/football-models.html',
+      note: 'The headline through 2026 week 10; still predicts every week as a shadow.',
     },
     {
       key: 'drive_sim', label: 'Drive simulator', role: 'shadow',
@@ -186,8 +191,8 @@ export function modelsForSport(sport: string): ModelSource[] | null {
 /** The model paired deltas are measured against: the market where it has live rows. */
 export const REFERENCE_MODEL: Record<string, string[]> = {
   mlb: ['market', 'v10'],
-  nfl: ['market', 'xgb'],
-  cfb: ['market', 'xgb'],
+  nfl: ['market', 'ridge'],
+  cfb: ['market', 'ridge'],
 };
 
 /** MLB totals & props shadow table (written by the PA simulator). */

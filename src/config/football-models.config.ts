@@ -42,18 +42,20 @@ export interface CompareModelSource {
 
 export const COMPARE_MODELS: CompareModelSource[] = [
   {
-    key: 'xgb',
-    label: 'Production XGBoost',
-    table: 'game_predictions',
-    // A classifier: it predicts who wins, not by how much.
-    hasMargin: false,
+    // The headline since 2026 (NFL week 9, CFB week 11). Read from its own table, which holds its whole live record.
+    key: 'ridge',
+    label: 'Margin ridge (production)',
+    table: 'game_predictions_ridge_shadow',
+    hasMargin: true,
     sports: ['nfl', 'cfb'],
   },
   {
-    key: 'ridge',
-    label: 'Margin ridge (shadow)',
-    table: 'game_predictions_ridge_shadow',
-    hasMargin: true,
+    // The headline before that; its own table is seeded with every row it wrote to game_predictions.
+    key: 'xgb',
+    label: 'XGBoost (former production)',
+    table: 'game_predictions_xgb_shadow',
+    // A classifier: it predicts who wins, not by how much.
+    hasMargin: false,
     sports: ['nfl', 'cfb'],
   },
   {

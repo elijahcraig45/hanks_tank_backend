@@ -353,7 +353,7 @@ describe('GET /api/predictions/nfl/slate', () => {
         // A post-kickoff snapshot (in-game FPI) must not replace the pregame one.
         { game_id: '2030_03_KC_MIA', home_win_probability: 0.9, predicted_home_margin: 7, predicted_at: { value: '2030-09-28T19:00:00Z' } },
       ]]],
-      [/game_predictions`/, [[{
+      [/game_predictions_xgb_shadow`/, [[{
         game_id: '2030_03_KC_MIA', home_win_probability: 0.32, predicted_at: { value: '2030-09-23T10:00:00Z' }, model_version: 'nfl_v1',
       }]]],
     ]);
@@ -365,7 +365,7 @@ describe('GET /api/predictions/nfl/slate', () => {
     expect(status).toBe(200);
     expect(body.success).toBe(true);
     const d = body.data;
-    expect(d).toEqual(expect.objectContaining({ sport: 'nfl', season: 2030, week: 3, date: null, featured_default: 'xgb' }));
+    expect(d).toEqual(expect.objectContaining({ sport: 'nfl', season: 2030, week: 3, date: null, featured_default: 'ridge' }));
     expect(d.weeks).toEqual([2, 3]);
     const byKey = Object.fromEntries(d.models.map((m: any) => [m.key, m]));
     expect(byKey.drive_sim.available).toBe(false);
